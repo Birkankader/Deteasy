@@ -210,8 +210,36 @@ button.danger:hover { background: #ef4444; color: #fff; }
   color: var(--muted);
   font-size: 13px;
   margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
 }
 .meta strong { color: var(--accent); }
+.meta .ctrls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.meta .inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.meta .inline span { display: none; }
+.meta .inline select {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.meta .inline.check {
+  cursor: pointer;
+}
+.meta .inline.check input {
+  accent-color: var(--accent);
+}
 
 .tablewrap {
   overflow-x: auto;

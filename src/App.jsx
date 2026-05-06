@@ -7,19 +7,7 @@ import {
   API_MAX_PAGE_SIZE,
 } from './api.js'
 
-const PAGE_SIZE_OPTIONS = [
-  { value: 15, label: '15' },
-  { value: 25, label: '25' },
-  { value: 50, label: '50' },
-  { value: 100, label: '100' },
-  { value: 250, label: '250' },
-  { value: 500, label: '500' },
-  { value: 1000, label: '1.000' },
-  { value: 5000, label: '5.000' },
-  { value: 'all', label: 'Tümü' },
-]
-
-const HEAVY_THRESHOLD = 1000
+const PAGE_SIZE_OPTIONS = [15, 25, 50, 100, 250, 500, 1000]
 
 export default function App() {
   const [iller, setIller] = useState([])
@@ -35,19 +23,19 @@ export default function App() {
     kategoriId: '',
     statuId: '',
     birimAdi: '',
-    page: 1,
-    pageSize: 15,
   })
 
-  const [result, setResult] = useState(null)
+  const [pageSize, setPageSize] = useState(25)
+  const [showAll, setShowAll] = useState(false)
+  const [page, setPage] = useState(1)
+
+  const [dataset, setDataset] = useState(null)
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(null)
   const [error, setError] = useState(null)
 
   const debounceRef = useRef(null)
   const abortRef = useRef(null)
-  const filtersRef = useRef(filters)
-  filtersRef.current = filters
 
   useEffect(() => {
     getIller()
@@ -91,11 +79,13 @@ export default function App() {
     filters.statuId ||
     filters.birimAdi
 
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters])
+  const stale = dataset && dataset.filtersKey !== filtersKey
+
   function update(key, value) {
     setFilters((f) => {
       const next = { ...f, [key]: value }
       if (key === 'ilId') next.ilceId = ''
-      if (key !== 'page') next.page = 1
       return next
     })
   }
@@ -104,25 +94,23 @@ export default function App() {
     setSelectedKategori(k)
     setKategoriQuery(k.ad)
     setKategoriOpen(false)
-    setFilters((f) => ({ ...f, kategoriId: k.id ?? k.kategoriId ?? '', statuId: '', page: 1 }))
+    setFilters((f) => ({ ...f, kategoriId: k.id ?? k.kategoriId ?? '', statuId: '' }))
   }
 
   function clearKategori() {
     setSelectedKategori(null)
     setKategoriQuery('')
     setKategoriler([])
-    setFilters((f) => ({ ...f, kategoriId: '', statuId: '', page: 1 }))
+    setFilters((f) => ({ ...f, kategoriId: '', statuId: '' }))
   }
 
   function cancel() {
     if (abortRef.current) abortRef.current.abort()
   }
 
-  async function runSearch(overrideFilters) {
-    const f = overrideFilters || filtersRef.current
+  async function loadAll() {
     setError(null)
-
-    if (!f.ilId && !f.ilceId && !f.kategoriId && !f.statuId && !f.birimAdi) {
+    if (!hasFilter) {
       setError('En az bir filtre seçin (İl, İlçe, Kategori, Statü veya Birim Adı).')
       return
     }
@@ -134,17 +122,25 @@ export default function App() {
     setLoading(true)
     setProgress(null)
     try {
-      const r = await getBirimlerAggregate(f, {
-        signal: ctrl.signal,
-        onProgress: (p) => setProgress(p),
+      const r = await getBirimlerAggregate(
+        { ...filters, page: 1, pageSize: 'all' },
+        {
+          signal: ctrl.signal,
+          onProgress: (p) => setProgress(p),
+        }
+      )
+      setDataset({
+        filtersKey,
+        all: r.data,
+        totalCount: r.totalCount,
+        failedPages: r.failedPages || [],
       })
-      setResult(r)
+      setPage(1)
     } catch (err) {
       if (err.name === 'AbortError') {
         setError('İptal edildi.')
       } else {
         setError(err.message)
-        setResult(null)
       }
     } finally {
       setLoading(false)
@@ -155,38 +151,30 @@ export default function App() {
 
   function onSubmit(e) {
     e.preventDefault()
-    const next = { ...filtersRef.current, page: 1 }
-    setFilters(next)
-    runSearch(next)
+    loadAll()
   }
+
+  const totalRows = dataset?.all.length || 0
+  const effectivePageSize = showAll ? Math.max(totalRows, 1) : pageSize
+  const totalPages = totalRows ? Math.max(1, Math.ceil(totalRows / effectivePageSize)) : 1
+  const safePage = Math.min(page, totalPages)
+  const start = (safePage - 1) * effectivePageSize
+  const visibleRows = useMemo(
+    () => (dataset ? dataset.all.slice(start, start + effectivePageSize) : []),
+    [dataset, start, effectivePageSize]
+  )
 
   function gotoPage(p) {
-    const next = { ...filtersRef.current, page: p }
-    setFilters(next)
-    runSearch(next)
+    setPage(Math.max(1, Math.min(totalPages, p)))
   }
-
-  const isAll = filters.pageSize === 'all'
-  const totalPages = result
-    ? isAll
-      ? 1
-      : Math.max(1, Math.ceil(result.totalCount / Number(filters.pageSize)))
-    : 1
-
-  const heavy =
-    filters.pageSize === 'all' || Number(filters.pageSize) >= HEAVY_THRESHOLD
-  const apiCallsEstimate = result
-    ? Math.ceil(
-        (isAll ? result.totalCount : Math.min(Number(filters.pageSize), result.totalCount)) /
-          API_MAX_PAGE_SIZE
-      )
-    : null
 
   return (
     <div className="app">
       <header className="hdr">
         <h1>DETSİS Birim Arama</h1>
-        <span className="sub">yetkiliapi.detsis.gov.tr · API limit: 100/sayfa · UI'da birleştirildi</span>
+        <span className="sub">
+          API limit 100/sayfa · UI tüm kayıtları önden çeker, sayfalama client-side
+        </span>
       </header>
 
       <form className="filters" onSubmit={onSubmit}>
@@ -281,40 +269,16 @@ export default function App() {
             />
           </label>
 
-          <label>
-            <span>Sayfa Boyutu</span>
-            <select
-              value={filters.pageSize}
-              onChange={(e) => {
-                const v = e.target.value
-                update('pageSize', v === 'all' ? 'all' : Number(v))
-              }}
-            >
-              {PAGE_SIZE_OPTIONS.map((o) => (
-                <option key={String(o.value)} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
           {loading ? (
             <button type="button" className="danger" onClick={cancel}>
               İptal
             </button>
           ) : (
             <button type="submit" className="primary">
-              Ara
+              Tümünü Çek
             </button>
           )}
         </div>
-
-        {heavy && !loading && (
-          <div className="hint">
-            Seçilen boyut API limitinin üstünde. Sorgu, arkaplanda 100'lük gruplar halinde çağrılır.
-            {apiCallsEstimate ? ` Tahmini API çağrısı: ${apiCallsEstimate}.` : ''}
-          </div>
-        )}
 
         {loading && progress && (
           <div className="progress">
@@ -332,32 +296,71 @@ export default function App() {
               {progress.totalCount
                 ? ` (toplam ${progress.totalCount.toLocaleString('tr-TR')})`
                 : ''}
-              {progress.failed
-                ? ` · ${progress.failed} parça başarısız`
-                : ''}
+              {progress.failed ? ` · ${progress.failed} parça başarısız` : ''}
             </span>
+          </div>
+        )}
+
+        {!loading && stale && (
+          <div className="hint">
+            Filtreler değişti. Yeni sonuçlar için <strong>Tümünü Çek</strong>'e bas.
           </div>
         )}
 
         {error && <div className="error">{error}</div>}
       </form>
 
-      {result?.failedPages?.length > 0 && (
+      {dataset?.failedPages?.length > 0 && (
         <div className="warn">
           <span>
-            {result.failedPages.length} parça sunucu hatası nedeniyle çekilemedi (sayfalar: {result.failedPages.slice(0, 8).join(', ')}{result.failedPages.length > 8 ? '…' : ''}).
-            Eksik kayıt sayısı: {(result.failedPages.length * 100).toLocaleString('tr-TR')} civarı.
+            {dataset.failedPages.length} parça sunucu hatası nedeniyle çekilemedi (sayfalar:{' '}
+            {dataset.failedPages.slice(0, 8).join(', ')}
+            {dataset.failedPages.length > 8 ? '…' : ''}). Eksik kayıt:{' '}
+            {(dataset.failedPages.length * API_MAX_PAGE_SIZE).toLocaleString('tr-TR')} civarı.
           </span>
-          <button type="button" onClick={() => runSearch()}>Yeniden Dene</button>
+          <button type="button" onClick={loadAll}>Yeniden Dene</button>
         </div>
       )}
 
-      {result && (
+      {dataset && (
         <section className="result">
           <div className="meta">
-            <strong>{result.totalCount.toLocaleString('tr-TR')}</strong> sonuç ·
-            görüntülenen: {result.data.length.toLocaleString('tr-TR')} ·
-            {isAll ? ' tüm kayıtlar' : ` sayfa ${result.page} / ${totalPages}`}
+            <strong>{dataset.totalCount.toLocaleString('tr-TR')}</strong> sonuç ·
+            önbellekte: {totalRows.toLocaleString('tr-TR')} kayıt ·
+            {showAll
+              ? ' tüm kayıtlar görünüyor'
+              : ` sayfa ${safePage} / ${totalPages} (${effectivePageSize}/sayfa)`}
+
+            <span className="ctrls">
+              <label className="inline">
+                Sayfa boyutu
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setPage(1)
+                  }}
+                  disabled={showAll}
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline check">
+                <input
+                  type="checkbox"
+                  checked={showAll}
+                  onChange={(e) => {
+                    setShowAll(e.target.checked)
+                    setPage(1)
+                  }}
+                />
+                Tümünü göster
+              </label>
+            </span>
           </div>
 
           <div className="tablewrap">
@@ -374,9 +377,9 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {result.data.map((b, idx) => (
-                  <tr key={(b.id ?? b.detsisNo) + ':' + idx}>
-                    <td className="num">{idx + 1}</td>
+                {visibleRows.map((b, idx) => (
+                  <tr key={(b.id ?? b.detsisNo) + ':' + (start + idx)}>
+                    <td className="num">{start + idx + 1}</td>
                     <td className="mono">{b.detsisNo}</td>
                     <td>{b.birimAdi}</td>
                     <td>{b.kategoriAdi}</td>
@@ -390,7 +393,7 @@ export default function App() {
                     </td>
                   </tr>
                 ))}
-                {result.data.length === 0 && (
+                {visibleRows.length === 0 && (
                   <tr>
                     <td colSpan={7} className="empty">Sonuç yok.</td>
                   </tr>
@@ -399,20 +402,23 @@ export default function App() {
             </table>
           </div>
 
-          {!isAll && totalPages > 1 && (
+          {!showAll && totalPages > 1 && (
             <div className="pager">
-              <button disabled={result.page <= 1 || loading} onClick={() => gotoPage(1)}>«</button>
-              <button disabled={result.page <= 1 || loading} onClick={() => gotoPage(result.page - 1)}>‹</button>
-              <span>{result.page} / {totalPages}</span>
-              <button disabled={result.page >= totalPages || loading} onClick={() => gotoPage(result.page + 1)}>›</button>
-              <button disabled={result.page >= totalPages || loading} onClick={() => gotoPage(totalPages)}>»</button>
+              <button disabled={safePage <= 1} onClick={() => gotoPage(1)}>«</button>
+              <button disabled={safePage <= 1} onClick={() => gotoPage(safePage - 1)}>‹</button>
+              <span>{safePage} / {totalPages}</span>
+              <button disabled={safePage >= totalPages} onClick={() => gotoPage(safePage + 1)}>›</button>
+              <button disabled={safePage >= totalPages} onClick={() => gotoPage(totalPages)}>»</button>
             </div>
           )}
         </section>
       )}
 
       <footer className="ftr">
-        <small>Veri kaynağı: yetkiliapi.detsis.gov.tr — API limiti 100/sayfa, UI 100'lük gruplarla birleştirir.</small>
+        <small>
+          Veri kaynağı: yetkiliapi.detsis.gov.tr — API 100/sayfa, UI 100'lük gruplarla tüm kayıtları
+          birleştirip belleğe alır. Sayfa değişimi anında.
+        </small>
       </footer>
     </div>
   )
