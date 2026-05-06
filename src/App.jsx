@@ -3,10 +3,23 @@ import {
   getIller,
   getIlceler,
   searchKategoriler,
-  getBirimler,
+  getBirimlerAggregate,
+  API_MAX_PAGE_SIZE,
 } from './api.js'
 
-const PAGE_SIZES = [15, 25, 50, 100, 200]
+const PAGE_SIZE_OPTIONS = [
+  { value: 15, label: '15' },
+  { value: 25, label: '25' },
+  { value: 50, label: '50' },
+  { value: 100, label: '100' },
+  { value: 250, label: '250' },
+  { value: 500, label: '500' },
+  { value: 1000, label: '1.000' },
+  { value: 5000, label: '5.000' },
+  { value: 'all', label: 'Tümü' },
+]
+
+const HEAVY_THRESHOLD = 1000
 
 export default function App() {
   const [iller, setIller] = useState([])
@@ -28,9 +41,13 @@ export default function App() {
 
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [progress, setProgress] = useState(null)
   const [error, setError] = useState(null)
 
   const debounceRef = useRef(null)
+  const abortRef = useRef(null)
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
 
   useEffect(() => {
     getIller()
@@ -97,40 +114,82 @@ export default function App() {
     setFilters((f) => ({ ...f, kategoriId: '', statuId: '', page: 1 }))
   }
 
-  async function search(e) {
-    e?.preventDefault()
+  function cancel() {
+    if (abortRef.current) abortRef.current.abort()
+  }
+
+  async function runSearch(overrideFilters) {
+    const f = overrideFilters || filtersRef.current
     setError(null)
-    if (!hasFilter) {
+
+    if (!f.ilId && !f.ilceId && !f.kategoriId && !f.statuId && !f.birimAdi) {
       setError('En az bir filtre seçin (İl, İlçe, Kategori, Statü veya Birim Adı).')
       return
     }
+
+    if (abortRef.current) abortRef.current.abort()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+
     setLoading(true)
+    setProgress(null)
     try {
-      const r = await getBirimler(filters)
+      const r = await getBirimlerAggregate(f, {
+        signal: ctrl.signal,
+        onProgress: (p) => setProgress(p),
+      })
       setResult(r)
     } catch (err) {
-      setError(err.message)
-      setResult(null)
+      if (err.name === 'AbortError') {
+        setError('İptal edildi.')
+      } else {
+        setError(err.message)
+        setResult(null)
+      }
     } finally {
       setLoading(false)
+      setProgress(null)
+      abortRef.current = null
     }
   }
 
-  function gotoPage(p) {
-    setFilters((f) => ({ ...f, page: p }))
-    setTimeout(() => search(), 0)
+  function onSubmit(e) {
+    e.preventDefault()
+    const next = { ...filtersRef.current, page: 1 }
+    setFilters(next)
+    runSearch(next)
   }
 
-  const totalPages = result ? Math.max(1, Math.ceil(result.totalCount / result.pageSize)) : 1
+  function gotoPage(p) {
+    const next = { ...filtersRef.current, page: p }
+    setFilters(next)
+    runSearch(next)
+  }
+
+  const isAll = filters.pageSize === 'all'
+  const totalPages = result
+    ? isAll
+      ? 1
+      : Math.max(1, Math.ceil(result.totalCount / Number(filters.pageSize)))
+    : 1
+
+  const heavy =
+    filters.pageSize === 'all' || Number(filters.pageSize) >= HEAVY_THRESHOLD
+  const apiCallsEstimate = result
+    ? Math.ceil(
+        (isAll ? result.totalCount : Math.min(Number(filters.pageSize), result.totalCount)) /
+          API_MAX_PAGE_SIZE
+      )
+    : null
 
   return (
     <div className="app">
       <header className="hdr">
         <h1>DETSİS Birim Arama</h1>
-        <span className="sub">yetkiliapi.detsis.gov.tr · proxy: /detsis</span>
+        <span className="sub">yetkiliapi.detsis.gov.tr · API limit: 100/sayfa · UI'da birleştirildi</span>
       </header>
 
-      <form className="filters" onSubmit={search}>
+      <form className="filters" onSubmit={onSubmit}>
         <div className="row">
           <label>
             <span>İl</span>
@@ -177,7 +236,10 @@ export default function App() {
             {kategoriOpen && kategoriler.length > 0 && (
               <ul className="dropdown">
                 {kategoriler.map((k, idx) => (
-                  <li key={(k.id ?? k.kategoriId ?? idx) + ':' + k.ad} onMouseDown={() => selectKategori(k)}>
+                  <li
+                    key={(k.id ?? k.kategoriId ?? idx) + ':' + k.ad}
+                    onMouseDown={() => selectKategori(k)}
+                  >
                     <strong>{k.ad}</strong>
                     {k.statuListesi?.length ? <em> · {k.statuListesi.length} statü</em> : null}
                   </li>
@@ -223,20 +285,56 @@ export default function App() {
             <span>Sayfa Boyutu</span>
             <select
               value={filters.pageSize}
-              onChange={(e) => update('pageSize', Number(e.target.value))}
+              onChange={(e) => {
+                const v = e.target.value
+                update('pageSize', v === 'all' ? 'all' : Number(v))
+              }}
             >
-              {PAGE_SIZES.map((n) => (
-                <option key={n} value={n}>
-                  {n}
+              {PAGE_SIZE_OPTIONS.map((o) => (
+                <option key={String(o.value)} value={o.value}>
+                  {o.label}
                 </option>
               ))}
             </select>
           </label>
 
-          <button type="submit" className="primary" disabled={loading}>
-            {loading ? 'Aranıyor…' : 'Ara'}
-          </button>
+          {loading ? (
+            <button type="button" className="danger" onClick={cancel}>
+              İptal
+            </button>
+          ) : (
+            <button type="submit" className="primary">
+              Ara
+            </button>
+          )}
         </div>
+
+        {heavy && !loading && (
+          <div className="hint">
+            Seçilen boyut API limitinin üstünde. Sorgu, arkaplanda 100'lük gruplar halinde çağrılır.
+            {apiCallsEstimate ? ` Tahmini API çağrısı: ${apiCallsEstimate}.` : ''}
+          </div>
+        )}
+
+        {loading && progress && (
+          <div className="progress">
+            <div
+              className="bar"
+              style={{
+                width:
+                  progress.target > 0
+                    ? Math.min(100, (progress.fetched / progress.target) * 100) + '%'
+                    : '0%',
+              }}
+            />
+            <span>
+              {progress.fetched.toLocaleString('tr-TR')} / {progress.target.toLocaleString('tr-TR')}
+              {progress.totalCount
+                ? ` (toplam ${progress.totalCount.toLocaleString('tr-TR')})`
+                : ''}
+            </span>
+          </div>
+        )}
 
         {error && <div className="error">{error}</div>}
       </form>
@@ -245,13 +343,15 @@ export default function App() {
         <section className="result">
           <div className="meta">
             <strong>{result.totalCount.toLocaleString('tr-TR')}</strong> sonuç ·
-            sayfa {result.page} / {totalPages} · pageSize {result.pageSize}
+            görüntülenen: {result.data.length.toLocaleString('tr-TR')} ·
+            {isAll ? ' tüm kayıtlar' : ` sayfa ${result.page} / ${totalPages}`}
           </div>
 
           <div className="tablewrap">
             <table>
               <thead>
                 <tr>
+                  <th>#</th>
                   <th>DETSİS No</th>
                   <th>Birim Adı</th>
                   <th>Kategori</th>
@@ -261,8 +361,9 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {result.data.map((b) => (
-                  <tr key={b.id ?? b.detsisNo}>
+                {result.data.map((b, idx) => (
+                  <tr key={(b.id ?? b.detsisNo) + ':' + idx}>
+                    <td className="num">{idx + 1}</td>
                     <td className="mono">{b.detsisNo}</td>
                     <td>{b.birimAdi}</td>
                     <td>{b.kategoriAdi}</td>
@@ -278,25 +379,27 @@ export default function App() {
                 ))}
                 {result.data.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="empty">Sonuç yok.</td>
+                    <td colSpan={7} className="empty">Sonuç yok.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          <div className="pager">
-            <button disabled={result.page <= 1 || loading} onClick={() => gotoPage(1)}>«</button>
-            <button disabled={result.page <= 1 || loading} onClick={() => gotoPage(result.page - 1)}>‹</button>
-            <span>{result.page} / {totalPages}</span>
-            <button disabled={result.page >= totalPages || loading} onClick={() => gotoPage(result.page + 1)}>›</button>
-            <button disabled={result.page >= totalPages || loading} onClick={() => gotoPage(totalPages)}>»</button>
-          </div>
+          {!isAll && totalPages > 1 && (
+            <div className="pager">
+              <button disabled={result.page <= 1 || loading} onClick={() => gotoPage(1)}>«</button>
+              <button disabled={result.page <= 1 || loading} onClick={() => gotoPage(result.page - 1)}>‹</button>
+              <span>{result.page} / {totalPages}</span>
+              <button disabled={result.page >= totalPages || loading} onClick={() => gotoPage(result.page + 1)}>›</button>
+              <button disabled={result.page >= totalPages || loading} onClick={() => gotoPage(totalPages)}>»</button>
+            </div>
+          )}
         </section>
       )}
 
       <footer className="ftr">
-        <small>Veri kaynağı: yetkiliapi.detsis.gov.tr — geliştirme proxy üzerinden çağrılır.</small>
+        <small>Veri kaynağı: yetkiliapi.detsis.gov.tr — API limiti 100/sayfa, UI 100'lük gruplarla birleştirir.</small>
       </footer>
     </div>
   )
