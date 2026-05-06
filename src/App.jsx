@@ -332,12 +332,25 @@ export default function App() {
               {progress.totalCount
                 ? ` (toplam ${progress.totalCount.toLocaleString('tr-TR')})`
                 : ''}
+              {progress.failed
+                ? ` · ${progress.failed} parça başarısız`
+                : ''}
             </span>
           </div>
         )}
 
         {error && <div className="error">{error}</div>}
       </form>
+
+      {result?.failedPages?.length > 0 && (
+        <div className="warn">
+          <span>
+            {result.failedPages.length} parça sunucu hatası nedeniyle çekilemedi (sayfalar: {result.failedPages.slice(0, 8).join(', ')}{result.failedPages.length > 8 ? '…' : ''}).
+            Eksik kayıt sayısı: {(result.failedPages.length * 100).toLocaleString('tr-TR')} civarı.
+          </span>
+          <button type="button" onClick={() => runSearch()}>Yeniden Dene</button>
+        </div>
+      )}
 
       {result && (
         <section className="result">

@@ -133,6 +133,28 @@ button.danger:hover { background: #ef4444; color: #fff; }
 
 .num { color: var(--muted); font-variant-numeric: tabular-nums; width: 1%; white-space: nowrap; }
 
+.warn {
+  margin-bottom: 16px;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid #ca8a04;
+  color: #fde68a;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.warn span { flex: 1; }
+.warn button {
+  background: #ca8a04;
+  color: #1a1306;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.warn button:hover { background: #eab308; }
+
 .kategori { position: relative; }
 .kategori .clear {
   position: absolute;
