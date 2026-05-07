@@ -7,6 +7,7 @@ import {
   getBirimlerAggregate,
   API_MAX_PAGE_SIZE,
 } from './api.js'
+import Tree from './Tree.jsx'
 
 const PAGE_SIZE_OPTIONS = [15, 25, 50, 100, 250, 500, 1000]
 const FETCH_LIMIT_OPTIONS = [
@@ -30,6 +31,7 @@ export default function App() {
   const [ustBirimOpen, setUstBirimOpen] = useState(false)
   const [ustBirimLoading, setUstBirimLoading] = useState(false)
   const [selectedUstBirim, setSelectedUstBirim] = useState(null)
+  const [treeOpen, setTreeOpen] = useState(false)
 
   const [filters, setFilters] = useState({
     ilId: '',
@@ -414,7 +416,14 @@ export default function App() {
         <div className="row single">
           <label className="ustbirim">
             <span>
-              Üst Birim (hiyerarşi) — yaz, seç
+              Üst Birim (hiyerarşi) — yaz veya ağaçtan seç
+              <button
+                type="button"
+                className="inline-clear"
+                onClick={() => setTreeOpen((o) => !o)}
+              >
+                {treeOpen ? 'Ağacı gizle' : 'Ağaçtan seç'}
+              </button>
               {selectedUstBirim && (
                 <button type="button" className="clear inline-clear" onClick={clearUstBirim}>
                   Temizle
@@ -459,6 +468,14 @@ export default function App() {
                 Seçili: <strong>{selectedUstBirim.birimAdi}</strong>
                 <span className="hier-line"> · {selectedUstBirim.kurumHiyerarsisi}</span>
               </div>
+            )}
+            {treeOpen && (
+              <Tree
+                onSelect={(b) => {
+                  selectUstBirim(b)
+                  setTreeOpen(false)
+                }}
+              />
             )}
           </label>
         </div>
