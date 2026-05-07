@@ -8,6 +8,13 @@ import {
 } from './api.js'
 
 const PAGE_SIZE_OPTIONS = [15, 25, 50, 100, 250, 500, 1000]
+const FETCH_LIMIT_OPTIONS = [
+  { value: 100, label: '100' },
+  { value: 500, label: '500' },
+  { value: 1000, label: '1.000' },
+  { value: 5000, label: '5.000' },
+  { value: 'all', label: 'Tümü' },
+]
 
 export default function App() {
   const [iller, setIller] = useState([])
@@ -29,6 +36,7 @@ export default function App() {
   const [showAll, setShowAll] = useState(false)
   const [page, setPage] = useState(1)
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
+  const [fetchLimit, setFetchLimit] = useState(500)
 
   const [dataset, setDataset] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -122,26 +130,49 @@ export default function App() {
 
     setLoading(true)
     setProgress(null)
+    setPage(1)
+
+    setDataset({
+      filtersKey,
+      all: [],
+      totalCount: 0,
+      failedPages: [],
+      complete: false,
+      fetchLimit,
+    })
+
     try {
-      const r = await getBirimlerAggregate(
-        { ...filters, page: 1, pageSize: 'all' },
-        {
-          signal: ctrl.signal,
-          onProgress: (p) => setProgress(p),
-        }
-      )
+      const r = await getBirimlerAggregate(filters, {
+        offset: 0,
+        limit: fetchLimit,
+        signal: ctrl.signal,
+        onProgress: (p) => setProgress(p),
+        onChunk: (rows, meta) => {
+          setDataset((d) => {
+            if (!d || d.filtersKey !== filtersKey) return d
+            return {
+              ...d,
+              all: d.all.concat(rows),
+              totalCount: meta.totalCount,
+            }
+          })
+        },
+      })
       setDataset({
         filtersKey,
         all: r.data,
         totalCount: r.totalCount,
         failedPages: r.failedPages || [],
+        complete: true,
+        fetchLimit,
       })
-      setPage(1)
     } catch (err) {
       if (err.name === 'AbortError') {
-        setError('İptal edildi.')
+        setDataset((d) => (d ? { ...d, complete: true } : d))
+        setError('İptal edildi. Şu ana kadar gelen kayıtlar gösteriliyor.')
       } else {
         setError(err.message)
+        setDataset(null)
       }
     } finally {
       setLoading(false)
@@ -251,7 +282,7 @@ export default function App() {
       <header className="hdr">
         <h1>DETSİS Birim Arama</h1>
         <span className="sub">
-          API limit 100/sayfa · UI tüm kayıtları önden çeker, sayfalama client-side
+          API limit 100/sayfa · sonuçlar geldikçe ekrana akar, sayfalama anlık
         </span>
       </header>
 
@@ -347,13 +378,31 @@ export default function App() {
             />
           </label>
 
+          <label>
+            <span>Çekilecek</span>
+            <select
+              value={fetchLimit}
+              onChange={(e) => {
+                const v = e.target.value
+                setFetchLimit(v === 'all' ? 'all' : Number(v))
+              }}
+              disabled={loading}
+            >
+              {FETCH_LIMIT_OPTIONS.map((o) => (
+                <option key={String(o.value)} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {loading ? (
             <button type="button" className="danger" onClick={cancel}>
               İptal
             </button>
           ) : (
             <button type="submit" className="primary">
-              Tümünü Çek
+              Çek
             </button>
           )}
         </div>
@@ -404,9 +453,10 @@ export default function App() {
         <section className="result">
           <div className="meta">
             <strong>{dataset.totalCount.toLocaleString('tr-TR')}</strong> sonuç ·
-            önbellekte: {totalRows.toLocaleString('tr-TR')} kayıt ·
+            yüklendi: {totalRows.toLocaleString('tr-TR')} kayıt
+            {dataset.complete ? '' : ' (akıyor…)'} ·
             {showAll
-              ? ' tüm kayıtlar görünüyor'
+              ? ' tüm yüklenen kayıtlar'
               : ` sayfa ${safePage} / ${totalPages} (${effectivePageSize}/sayfa)`}
 
             <span className="ctrls">

@@ -93,65 +93,53 @@ function getBirimlerPage(filters, page, pageSize, signal, retries) {
 }
 
 /**
- * Fetches up to `uiPageSize` rows starting at offset (uiPage-1)*uiPageSize.
- * Backend caps pageSize at 100; this aggregator splits into 100-row API pages
- * and runs them with limited concurrency. Each chunk is retried on network
- * errors. Failed chunks (after retries) are reported via result.failedPages.
+ * Streaming aggregator. Splits requested range into 100-row API pages, fetches
+ * with limited concurrency, retries failures. Calls `onChunk(rows, meta)`
+ * for each chunk as it arrives (out of order under concurrency > 1).
  *
- * If uiPageSize === 'all', fetches every row matching the filters.
+ * opts:
+ *   offset       starting row index (default 0)
+ *   limit        max rows to collect; 'all' or null to fetch every match
+ *   signal       AbortSignal
+ *   onChunk      called per arrived chunk: (rows, { totalCount })
+ *   onProgress   called per chunk: ({ fetched, target, totalCount, failed })
+ *   concurrency  parallel workers (default 3)
  *
- * onProgress({ fetched, target, totalCount, failed }) called after each chunk.
+ * returns { offset, totalCount, data (ordered), failedPages }
  */
 export async function getBirimlerAggregate(filters, opts = {}) {
   const {
+    offset = 0,
+    limit = 'all',
     signal,
+    onChunk,
     onProgress,
     concurrency = 3,
     chunkRetries = DEFAULT_RETRIES,
   } = opts
 
-  const uiPage = Math.max(1, Number(filters.page) || 1)
   const apiSize = API_MAX_PAGE_SIZE
-  const wantAll = filters.pageSize === 'all'
-  const uiSize = wantAll ? Infinity : Number(filters.pageSize) || 15
-
-  const offset = wantAll ? 0 : (uiPage - 1) * uiSize
   const startApiPage = Math.floor(offset / apiSize) + 1
   const skipInFirst = offset - (startApiPage - 1) * apiSize
 
   const first = await getBirimlerPage(filters, startApiPage, apiSize, signal, chunkRetries)
   const total = first.totalCount ?? 0
-  const target = wantAll
-    ? Math.max(0, total - offset)
-    : Math.min(uiSize, Math.max(0, total - offset))
+  const remainingMatch = Math.max(0, total - offset)
+  const target =
+    limit === 'all' || limit == null
+      ? remainingMatch
+      : Math.min(Number(limit), remainingMatch)
 
   if (target === 0) {
-    return {
-      page: uiPage,
-      pageSize: wantAll ? total : uiSize,
-      totalCount: total,
-      data: [],
-      failedPages: [],
-    }
+    return { offset, totalCount: total, data: [], failedPages: [] }
   }
 
   const firstSlice = first.data.slice(skipInFirst, skipInFirst + target)
-  let collected = firstSlice
-  onProgress?.({
-    fetched: collected.length,
-    target,
-    totalCount: total,
-    failed: 0,
-  })
+  onChunk?.(firstSlice, { totalCount: total })
+  onProgress?.({ fetched: firstSlice.length, target, totalCount: total, failed: 0 })
 
-  if (collected.length >= target) {
-    return {
-      page: uiPage,
-      pageSize: wantAll ? total : uiSize,
-      totalCount: total,
-      data: collected.slice(0, target),
-      failedPages: [],
-    }
+  if (firstSlice.length >= target) {
+    return { offset, totalCount: total, data: firstSlice, failedPages: [] }
   }
 
   const consumedFromFirst = first.data.length - skipInFirst
@@ -173,7 +161,9 @@ export async function getBirimlerAggregate(filters, opts = {}) {
       const apiPage = pageNums[i]
       try {
         const r = await getBirimlerPage(filters, apiPage, apiSize, signal, chunkRetries)
-        buckets[i] = r.data || []
+        const rows = r.data || []
+        buckets[i] = rows
+        onChunk?.(rows, { totalCount: total })
       } catch (e) {
         if (e?.name === 'AbortError') throw e
         failedPages.push(apiPage)
@@ -193,17 +183,17 @@ export async function getBirimlerAggregate(filters, opts = {}) {
   const workerCount = Math.min(concurrency, pageNums.length)
   await Promise.all(Array.from({ length: workerCount }, () => worker()))
 
+  let ordered = firstSlice.slice()
   for (const bucket of buckets) {
-    if (collected.length >= target) break
+    if (ordered.length >= target) break
     if (!bucket) continue
-    collected = collected.concat(bucket.slice(0, target - collected.length))
+    ordered = ordered.concat(bucket.slice(0, target - ordered.length))
   }
 
   return {
-    page: uiPage,
-    pageSize: wantAll ? total : uiSize,
+    offset,
     totalCount: total,
-    data: collected,
+    data: ordered,
     failedPages: failedPages.sort((a, b) => a - b),
   }
 }
