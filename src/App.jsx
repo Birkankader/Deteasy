@@ -11,14 +11,14 @@ import Tree from './Tree.jsx'
 
 const PAGE_SIZE_OPTIONS = [15, 25, 50, 100, 250, 500, 1000]
 const QUICK_PRESETS = [
-  { kategoriId: 19, ad: 'Bakanlıklar' },
-  { kategoriId: 204, ad: 'Belediyeler' },
-  { kategoriId: 214, ad: 'Şirketler' },
-  { kategoriId: 132, ad: 'Üniversiteler' },
-  { kategoriId: 17, ad: 'Cumhurbaşkanlığı' },
-  { kategoriId: 125, ad: 'Yüksek Yargı' },
-  { kategoriId: 16, ad: 'TBMM' },
-  { kategoriId: 205, ad: 'İl Özel İdaresi' },
+  { kategoriId: 19, ad: 'Bakanlıklar', searchTerm: 'BAKANLIK' },
+  { kategoriId: 204, ad: 'Belediyeler', searchTerm: 'BELEDİYE' },
+  { kategoriId: 214, ad: 'Şirketler', searchTerm: 'ŞİRKET' },
+  { kategoriId: 132, ad: 'Üniversiteler', searchTerm: 'YÜKSEKÖĞRETİM' },
+  { kategoriId: 17, ad: 'Cumhurbaşkanlığı', searchTerm: 'CUMHURBAŞKANLIĞI' },
+  { kategoriId: 125, ad: 'Yüksek Yargı', searchTerm: 'YÜKSEK YARGI' },
+  { kategoriId: 16, ad: 'TBMM', searchTerm: 'TBMM' },
+  { kategoriId: 205, ad: 'İl Özel İdaresi', searchTerm: 'İL ÖZEL İDARESİ' },
 ]
 const FETCH_LIMIT_OPTIONS = [
   { value: 100, label: '100' },
@@ -57,6 +57,7 @@ export default function App() {
   const [page, setPage] = useState(1)
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [fetchLimit, setFetchLimit] = useState(500)
+  const [textFilter, setTextFilter] = useState('')
 
   const [dataset, setDataset] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -155,12 +156,24 @@ export default function App() {
     setFilters((f) => ({ ...f, kategoriId: '', statuId: '' }))
   }
 
-  function applyPreset(preset) {
-    setSelectedKategori({ id: preset.kategoriId, ad: preset.ad, statuListesi: [] })
-    setKategoriQuery(preset.ad)
+  async function applyPreset(preset) {
     setKategoriOpen(false)
     setKategoriler([])
     setFilters((f) => ({ ...f, kategoriId: preset.kategoriId, statuId: '' }))
+    setSelectedKategori({ id: preset.kategoriId, ad: preset.ad, statuListesi: [] })
+    setKategoriQuery(preset.ad)
+    try {
+      const r = await searchKategoriler(preset.searchTerm || preset.ad)
+      const match = (r.data || []).find(
+        (k) => (k.id ?? k.kategoriId) === preset.kategoriId
+      )
+      if (match) {
+        setSelectedKategori(match)
+        setKategoriQuery(match.ad)
+      }
+    } catch (e) {
+      // sessizce yut, statu listesiz devam edelim
+    }
   }
 
   function selectUstBirim(b) {
@@ -252,10 +265,28 @@ export default function App() {
 
   const NUMERIC_KEYS = new Set(['detsisNo'])
 
+  const baseAll = dataset?.all || []
+
+  const filteredAll = useMemo(() => {
+    const q = textFilter.trim()
+    if (!q) return baseAll
+    const lq = q.toLocaleLowerCase('tr')
+    return baseAll.filter((b) => {
+      return (
+        (b.birimAdi && b.birimAdi.toLocaleLowerCase('tr').includes(lq)) ||
+        (b.kurumHiyerarsisi && b.kurumHiyerarsisi.toLocaleLowerCase('tr').includes(lq)) ||
+        (b.statuAdi && b.statuAdi.toLocaleLowerCase('tr').includes(lq)) ||
+        (b.kategoriAdi && b.kategoriAdi.toLocaleLowerCase('tr').includes(lq)) ||
+        (b.ilAdi && b.ilAdi.toLocaleLowerCase('tr').includes(lq)) ||
+        (b.ilceAdi && b.ilceAdi.toLocaleLowerCase('tr').includes(lq)) ||
+        String(b.detsisNo || '').includes(q)
+      )
+    })
+  }, [baseAll, textFilter])
+
   const sortedAll = useMemo(() => {
-    if (!dataset) return []
-    if (!sort.key) return dataset.all
-    const arr = dataset.all.slice()
+    if (!sort.key) return filteredAll
+    const arr = filteredAll.slice()
     const dir = sort.dir === 'asc' ? 1 : -1
     const numeric = NUMERIC_KEYS.has(sort.key)
     arr.sort((a, b) => {
@@ -268,9 +299,10 @@ export default function App() {
       return String(va).localeCompare(String(vb), 'tr', { sensitivity: 'base' }) * dir
     })
     return arr
-  }, [dataset, sort])
+  }, [filteredAll, sort])
 
   const totalRows = sortedAll.length
+  const totalLoaded = baseAll.length
   const effectivePageSize = showAll ? Math.max(totalRows, 1) : pageSize
   const totalPages = totalRows ? Math.max(1, Math.ceil(totalRows / effectivePageSize)) : 1
   const safePage = Math.min(page, totalPages)
@@ -283,6 +315,10 @@ export default function App() {
   function gotoPage(p) {
     setPage(Math.max(1, Math.min(totalPages, p)))
   }
+
+  useEffect(() => {
+    setPage(1)
+  }, [textFilter])
 
   function toggleSort(key) {
     setSort((s) =>
@@ -299,15 +335,19 @@ export default function App() {
 
   function downloadJson() {
     if (!dataset) return
+    const useFiltered = !!(textFilter.trim() || sort.key)
+    const records = useFiltered ? sortedAll : dataset.all
     const payload = {
       fetchedAt: new Date().toISOString(),
       source: 'yetkiliapi.detsis.gov.tr',
       filters,
+      textFilter: textFilter.trim() || null,
       totalCount: dataset.totalCount,
-      recordCount: dataset.all.length,
+      loadedCount: dataset.all.length,
+      recordCount: records.length,
       failedPages: dataset.failedPages || [],
       sort: sort.key ? sort : null,
-      records: sort.key ? sortedAll : dataset.all,
+      records,
     }
     const slugParts = [
       filters.ilId && `il${filters.ilId}`,
@@ -604,10 +644,32 @@ export default function App() {
 
       {dataset && (
         <section className="result">
+          <div className="result-toolbar">
+            <input
+              type="text"
+              className="text-filter"
+              value={textFilter}
+              onChange={(e) => setTextFilter(e.target.value)}
+              placeholder="🔍 Sonuçlarda ara: birim adı, hiyerarşi, statü, il, ilçe, DETSİS no…"
+            />
+            {textFilter && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setTextFilter('')}
+              >
+                Temizle
+              </button>
+            )}
+          </div>
+
           <div className="meta">
             <strong>{dataset.totalCount.toLocaleString('tr-TR')}</strong> sonuç ·
-            yüklendi: {totalRows.toLocaleString('tr-TR')} kayıt
+            yüklendi: {totalLoaded.toLocaleString('tr-TR')} kayıt
             {dataset.complete ? '' : ' (akıyor…)'} ·
+            {textFilter
+              ? ` filtre eşleşmesi: ${totalRows.toLocaleString('tr-TR')} ·`
+              : ''}
             {showAll
               ? ' tüm yüklenen kayıtlar'
               : ` sayfa ${safePage} / ${totalPages} (${effectivePageSize}/sayfa)`}

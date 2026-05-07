@@ -403,6 +403,27 @@ button.ghost:hover { background: var(--panel-2); color: var(--accent); }
   border-radius: 10px;
   padding: 16px;
 }
+
+.result-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.text-filter {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+}
+.text-filter:focus {
+  border-color: var(--accent);
+  background: #18222e;
+}
+.text-filter::placeholder { color: var(--muted); }
 .meta {
   color: var(--muted);
   font-size: 13px;
