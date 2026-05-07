@@ -3,6 +3,7 @@ import {
   getIller,
   getIlceler,
   searchKategoriler,
+  searchBirimler,
   getBirimlerAggregate,
   API_MAX_PAGE_SIZE,
 } from './api.js'
@@ -24,12 +25,19 @@ export default function App() {
   const [kategoriOpen, setKategoriOpen] = useState(false)
   const [selectedKategori, setSelectedKategori] = useState(null)
 
+  const [ustBirimQuery, setUstBirimQuery] = useState('')
+  const [ustBirimResults, setUstBirimResults] = useState([])
+  const [ustBirimOpen, setUstBirimOpen] = useState(false)
+  const [ustBirimLoading, setUstBirimLoading] = useState(false)
+  const [selectedUstBirim, setSelectedUstBirim] = useState(null)
+
   const [filters, setFilters] = useState({
     ilId: '',
     ilceId: '',
     kategoriId: '',
     statuId: '',
     birimAdi: '',
+    ustBirimId: '',
   })
 
   const [pageSize, setPageSize] = useState(25)
@@ -44,6 +52,7 @@ export default function App() {
   const [error, setError] = useState(null)
 
   const debounceRef = useRef(null)
+  const ustBirimDebounceRef = useRef(null)
   const abortRef = useRef(null)
 
   useEffect(() => {
@@ -76,6 +85,26 @@ export default function App() {
     return () => clearTimeout(debounceRef.current)
   }, [kategoriQuery])
 
+  useEffect(() => {
+    if (ustBirimDebounceRef.current) clearTimeout(ustBirimDebounceRef.current)
+    if (!ustBirimQuery || ustBirimQuery.length < 2) {
+      setUstBirimResults([])
+      setUstBirimLoading(false)
+      return
+    }
+    if (selectedUstBirim && ustBirimQuery === selectedUstBirim.birimAdi) {
+      return
+    }
+    setUstBirimLoading(true)
+    ustBirimDebounceRef.current = setTimeout(() => {
+      searchBirimler(ustBirimQuery)
+        .then((r) => setUstBirimResults(r.data || []))
+        .catch((e) => setError(e.message))
+        .finally(() => setUstBirimLoading(false))
+    }, 300)
+    return () => clearTimeout(ustBirimDebounceRef.current)
+  }, [ustBirimQuery, selectedUstBirim])
+
   const statuOptions = useMemo(
     () => selectedKategori?.statuListesi || [],
     [selectedKategori]
@@ -86,7 +115,8 @@ export default function App() {
     filters.ilceId ||
     filters.kategoriId ||
     filters.statuId ||
-    filters.birimAdi
+    filters.birimAdi ||
+    filters.ustBirimId
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters])
   const stale = dataset && dataset.filtersKey !== filtersKey
@@ -111,6 +141,20 @@ export default function App() {
     setKategoriQuery('')
     setKategoriler([])
     setFilters((f) => ({ ...f, kategoriId: '', statuId: '' }))
+  }
+
+  function selectUstBirim(b) {
+    setSelectedUstBirim(b)
+    setUstBirimQuery(b.birimAdi)
+    setUstBirimOpen(false)
+    setFilters((f) => ({ ...f, ustBirimId: b.id ?? b.detsisNo ?? '' }))
+  }
+
+  function clearUstBirim() {
+    setSelectedUstBirim(null)
+    setUstBirimQuery('')
+    setUstBirimResults([])
+    setFilters((f) => ({ ...f, ustBirimId: '' }))
   }
 
   function cancel() {
@@ -364,6 +408,58 @@ export default function App() {
                 </option>
               ))}
             </select>
+          </label>
+        </div>
+
+        <div className="row single">
+          <label className="ustbirim">
+            <span>
+              Üst Birim (hiyerarşi) — yaz, seç
+              {selectedUstBirim && (
+                <button type="button" className="clear inline-clear" onClick={clearUstBirim}>
+                  Temizle
+                </button>
+              )}
+            </span>
+            <input
+              type="text"
+              value={ustBirimQuery}
+              onChange={(e) => {
+                setUstBirimQuery(e.target.value)
+                setUstBirimOpen(true)
+                if (selectedUstBirim) setSelectedUstBirim(null)
+                if (filters.ustBirimId) setFilters((f) => ({ ...f, ustBirimId: '' }))
+              }}
+              onFocus={() => setUstBirimOpen(true)}
+              onBlur={() => setTimeout(() => setUstBirimOpen(false), 180)}
+              placeholder="örn: Adalet Bakanlığı, Burak Ceyhan, İstanbul Büyükşehir"
+            />
+            {ustBirimOpen && ustBirimQuery.length >= 2 && (
+              <ul className="dropdown wide">
+                {ustBirimLoading && <li className="muted">Aranıyor…</li>}
+                {!ustBirimLoading && ustBirimResults.length === 0 && (
+                  <li className="muted">Sonuç yok.</li>
+                )}
+                {ustBirimResults.slice(0, 30).map((b) => (
+                  <li
+                    key={(b.id ?? b.detsisNo) + ':' + b.birimAdi}
+                    onMouseDown={() => selectUstBirim(b)}
+                  >
+                    <strong>{b.birimAdi}</strong>
+                    <em className="hier-line">{b.kurumHiyerarsisi}</em>
+                  </li>
+                ))}
+                {ustBirimResults.length > 30 && (
+                  <li className="muted">…{ustBirimResults.length - 30} kayıt daha</li>
+                )}
+              </ul>
+            )}
+            {selectedUstBirim && (
+              <div className="picked">
+                Seçili: <strong>{selectedUstBirim.birimAdi}</strong>
+                <span className="hier-line"> · {selectedUstBirim.kurumHiyerarsisi}</span>
+              </div>
+            )}
           </label>
         </div>
 

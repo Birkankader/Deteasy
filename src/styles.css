@@ -53,6 +53,52 @@ html, body, #root {
   margin-bottom: 12px;
 }
 .row:last-of-type { margin-bottom: 0; }
+.row.single { grid-template-columns: 1fr; }
+.ustbirim { width: 100%; }
+.ustbirim > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inline-clear {
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  position: static;
+}
+.inline-clear:hover { color: var(--danger); background: transparent; }
+.picked {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px solid #1e40af;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.picked strong { color: var(--accent); }
+.hier-line {
+  display: block;
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dropdown.wide {
+  max-height: 360px;
+}
+.dropdown li.muted {
+  color: var(--muted);
+  font-size: 12px;
+  cursor: default;
+}
+.dropdown li.muted:hover { background: transparent; }
 
 label {
   display: flex;

@@ -72,6 +72,14 @@ export function searchKategoriler(prefix) {
   )
 }
 
+export function searchBirimler(prefix) {
+  return getWithRetry(
+    `/unauthorizedaccessdata/tumbirimler/${encodeURIComponent(prefix)}`,
+    undefined,
+    1
+  )
+}
+
 function buildBirimQuery(filters, page, pageSize) {
   const qs = new URLSearchParams()
   qs.set('page', page)
@@ -81,6 +89,7 @@ function buildBirimQuery(filters, page, pageSize) {
   if (filters.kategoriId) qs.set('KategoriId', filters.kategoriId)
   if (filters.statuId) qs.set('StatuId', filters.statuId)
   if (filters.birimAdi) qs.set('birimAdi', filters.birimAdi)
+  if (filters.ustBirimId) qs.set('ustBirimId', filters.ustBirimId)
   return qs.toString()
 }
 
