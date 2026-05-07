@@ -94,6 +94,15 @@ button:disabled { background: #475569; color: #cbd5e1; cursor: not-allowed; }
 button.primary { align-self: end; }
 button.danger { align-self: end; background: var(--danger); color: #1a0606; }
 button.danger:hover { background: #ef4444; color: #fff; }
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+button.ghost:hover { background: var(--panel-2); color: var(--accent); }
 
 .hint {
   margin-top: 12px;
@@ -260,7 +269,13 @@ thead th {
   padding: 10px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  user-select: none;
 }
+thead th.sortable { cursor: pointer; }
+thead th.sortable:hover { color: var(--accent); background: #273344; }
+thead th.active { color: var(--accent); }
+thead th .arr { margin-left: 4px; opacity: 0.5; font-size: 10px; }
+thead th.active .arr { opacity: 1; }
 tbody td {
   padding: 10px;
   border-bottom: 1px solid #1e293b;

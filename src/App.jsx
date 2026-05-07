@@ -28,6 +28,7 @@ export default function App() {
   const [pageSize, setPageSize] = useState(25)
   const [showAll, setShowAll] = useState(false)
   const [page, setPage] = useState(1)
+  const [sort, setSort] = useState({ key: null, dir: 'asc' })
 
   const [dataset, setDataset] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -154,19 +155,96 @@ export default function App() {
     loadAll()
   }
 
-  const totalRows = dataset?.all.length || 0
+  const NUMERIC_KEYS = new Set(['detsisNo'])
+
+  const sortedAll = useMemo(() => {
+    if (!dataset) return []
+    if (!sort.key) return dataset.all
+    const arr = dataset.all.slice()
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const numeric = NUMERIC_KEYS.has(sort.key)
+    arr.sort((a, b) => {
+      const va = a?.[sort.key]
+      const vb = b?.[sort.key]
+      if (va == null && vb == null) return 0
+      if (va == null) return 1
+      if (vb == null) return -1
+      if (numeric) return ((Number(va) || 0) - (Number(vb) || 0)) * dir
+      return String(va).localeCompare(String(vb), 'tr', { sensitivity: 'base' }) * dir
+    })
+    return arr
+  }, [dataset, sort])
+
+  const totalRows = sortedAll.length
   const effectivePageSize = showAll ? Math.max(totalRows, 1) : pageSize
   const totalPages = totalRows ? Math.max(1, Math.ceil(totalRows / effectivePageSize)) : 1
   const safePage = Math.min(page, totalPages)
   const start = (safePage - 1) * effectivePageSize
   const visibleRows = useMemo(
-    () => (dataset ? dataset.all.slice(start, start + effectivePageSize) : []),
-    [dataset, start, effectivePageSize]
+    () => sortedAll.slice(start, start + effectivePageSize),
+    [sortedAll, start, effectivePageSize]
   )
 
   function gotoPage(p) {
     setPage(Math.max(1, Math.min(totalPages, p)))
   }
+
+  function toggleSort(key) {
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' }
+    )
+    setPage(1)
+  }
+
+  function clearSort() {
+    setSort({ key: null, dir: 'asc' })
+  }
+
+  function downloadJson() {
+    if (!dataset) return
+    const payload = {
+      fetchedAt: new Date().toISOString(),
+      source: 'yetkiliapi.detsis.gov.tr',
+      filters,
+      totalCount: dataset.totalCount,
+      recordCount: dataset.all.length,
+      failedPages: dataset.failedPages || [],
+      sort: sort.key ? sort : null,
+      records: sort.key ? sortedAll : dataset.all,
+    }
+    const slugParts = [
+      filters.ilId && `il${filters.ilId}`,
+      filters.ilceId && `ilce${filters.ilceId}`,
+      filters.kategoriId && `kat${filters.kategoriId}`,
+      filters.statuId && `statu${filters.statuId}`,
+      filters.birimAdi && filters.birimAdi.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 20),
+    ].filter(Boolean)
+    const slug = slugParts.join('_') || 'tum'
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    const fname = `detsis_${slug}_${stamp}.json`
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fname
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const COLS = [
+    { key: null, label: '#', sortable: false },
+    { key: 'detsisNo', label: 'DETSİS No' },
+    { key: 'birimAdi', label: 'Birim Adı' },
+    { key: 'kategoriAdi', label: 'Kategori' },
+    { key: 'statuAdi', label: 'Statü' },
+    { key: 'ilAdi', label: 'İl / İlçe' },
+    { key: 'kurumHiyerarsisi', label: 'Hiyerarşi' },
+  ]
 
   return (
     <div className="app">
@@ -332,6 +410,14 @@ export default function App() {
               : ` sayfa ${safePage} / ${totalPages} (${effectivePageSize}/sayfa)`}
 
             <span className="ctrls">
+              {sort.key && (
+                <button type="button" className="ghost" onClick={clearSort}>
+                  Sıralamayı temizle
+                </button>
+              )}
+              <button type="button" className="ghost" onClick={downloadJson}>
+                JSON indir
+              </button>
               <label className="inline">
                 Sayfa boyutu
                 <select
@@ -367,13 +453,25 @@ export default function App() {
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>DETSİS No</th>
-                  <th>Birim Adı</th>
-                  <th>Kategori</th>
-                  <th>Statü</th>
-                  <th>İl / İlçe</th>
-                  <th>Hiyerarşi</th>
+                  {COLS.map((c) => {
+                    const active = sort.key === c.key
+                    const arrow = !c.sortable && c.key === null
+                      ? ''
+                      : active
+                        ? sort.dir === 'asc' ? ' ▲' : ' ▼'
+                        : ' ↕'
+                    if (c.sortable === false) return <th key={c.label}>{c.label}</th>
+                    return (
+                      <th
+                        key={c.key}
+                        className={'sortable' + (active ? ' active' : '')}
+                        onClick={() => toggleSort(c.key)}
+                        title="Sırala"
+                      >
+                        {c.label}<span className="arr">{arrow}</span>
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
