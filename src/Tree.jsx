@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { API_MAX_PAGE_SIZE } from './api.js'
 
 const ROOT_CATEGORIES = [
@@ -23,10 +23,10 @@ const ROOT_CATEGORIES = [
 
 const PAGE = API_MAX_PAGE_SIZE
 
-async function fetchBirimlerPage(query, page) {
+async function fetchBirimlerPage(query, page = 1, pageSize = PAGE) {
   const url =
     '/detsis/api/backoffice/unauthorizedaccessdata/birimler?' +
-    new URLSearchParams({ ...query, page, pageSize: PAGE }).toString()
+    new URLSearchParams({ ...query, page, pageSize }).toString()
   const r = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!r.ok) {
     let msg = `HTTP ${r.status}`
@@ -39,9 +39,43 @@ async function fetchBirimlerPage(query, page) {
   return r.json()
 }
 
-export default function Tree({ onSelect }) {
+export default function Tree({ ilId, ilceId, ilAdi, ilceAdi, onSelect }) {
   const [nodes, setNodes] = useState({})
   const [expanded, setExpanded] = useState(new Set())
+  const [rootCounts, setRootCounts] = useState(null)
+  const [countsLoading, setCountsLoading] = useState(false)
+
+  const filterParams = useMemo(() => {
+    const p = {}
+    if (ilId) p.ilId = ilId
+    if (ilceId) p.ilceId = ilceId
+    return p
+  }, [ilId, ilceId])
+
+  const filtered = !!(ilId || ilceId)
+
+  useEffect(() => {
+    if (!filtered) {
+      setRootCounts(null)
+      return
+    }
+    let cancelled = false
+    setCountsLoading(true)
+    Promise.all(
+      ROOT_CATEGORIES.map((c) =>
+        fetchBirimlerPage({ ...filterParams, KategoriId: c.id }, 1, 1)
+          .then((r) => [c.id, r.totalCount ?? 0])
+          .catch(() => [c.id, 0])
+      )
+    ).then((entries) => {
+      if (cancelled) return
+      setRootCounts(Object.fromEntries(entries))
+      setCountsLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [filterParams, filtered])
 
   function nodeKey(kind, id) {
     return `${kind}:${id}`
@@ -96,41 +130,72 @@ export default function Tree({ onSelect }) {
     loadChildren(key, query, (cur.page || 1) + 1)
   }
 
+  const visibleRoots = useMemo(() => {
+    if (!filtered) return ROOT_CATEGORIES
+    if (!rootCounts) return []
+    return ROOT_CATEGORIES.filter((c) => (rootCounts[c.id] ?? 0) > 0)
+  }, [filtered, rootCounts])
+
   return (
     <div className="tree">
       <div className="tree-hint">
-        Ağaçtan birim seç. Tıkla → seç. ▶ ile alt birimleri aç.
+        {filtered ? (
+          <>
+            Aktif filtre:{' '}
+            {ilId && <span className="chip">{ilAdi || `İl #${ilId}`}</span>}{' '}
+            {ilceId && <span className="chip">{ilceAdi || `İlçe #${ilceId}`}</span>}
+            {' · '}
+            {countsLoading
+              ? 'sayım yükleniyor…'
+              : `${visibleRoots.length} kök kategori`}
+          </>
+        ) : (
+          'Ağaçtan birim seç. Tıkla → seç. ▶ ile alt birimleri aç. (İl/ilçe seçersen ağaç ona göre filtrelenir.)'
+        )}
       </div>
+
+      {filtered && countsLoading && visibleRoots.length === 0 && (
+        <div className="tree-loading">Kategori sayımları çekiliyor…</div>
+      )}
+
+      {filtered && !countsLoading && visibleRoots.length === 0 && (
+        <div className="tree-empty">Bu il/ilçede kayıt yok.</div>
+      )}
+
       <ul className="tree-list">
-        {ROOT_CATEGORIES.map((c) => {
+        {visibleRoots.map((c) => {
           const key = nodeKey('kat', c.id)
           const isOpen = expanded.has(key)
           const node = nodes[key]
+          const rootCount = rootCounts?.[c.id]
           return (
             <li key={key} className="tree-node root">
               <div className="tree-row">
                 <button
                   type="button"
                   className="caret"
-                  onClick={() => toggle(key, { KategoriId: c.id })}
+                  onClick={() => toggle(key, { ...filterParams, KategoriId: c.id })}
                   aria-label={isOpen ? 'Kapat' : 'Aç'}
                 >
                   {isOpen ? '▼' : '▶'}
                 </button>
                 <span className="tree-label kat">{c.ad}</span>
-                {node?.totalCount != null && (
-                  <span className="tree-count">{node.totalCount.toLocaleString('tr-TR')}</span>
+                {(node?.totalCount != null || rootCount != null) && (
+                  <span className="tree-count">
+                    {(node?.totalCount ?? rootCount).toLocaleString('tr-TR')}
+                  </span>
                 )}
               </div>
               {isOpen && (
                 <BirimList
                   parentKey={key}
-                  query={{ KategoriId: c.id }}
+                  query={{ ...filterParams, KategoriId: c.id }}
                   node={node}
                   nodes={nodes}
                   expanded={expanded}
                   toggle={toggle}
                   loadMore={loadMore}
+                  filterParams={filterParams}
                   onSelect={onSelect}
                 />
               )}
@@ -142,7 +207,17 @@ export default function Tree({ onSelect }) {
   )
 }
 
-function BirimList({ parentKey, query, node, nodes, expanded, toggle, loadMore, onSelect }) {
+function BirimList({
+  parentKey,
+  query,
+  node,
+  nodes,
+  expanded,
+  toggle,
+  loadMore,
+  filterParams,
+  onSelect,
+}) {
   if (!node) return <div className="tree-loading">Yükleniyor…</div>
   if (node.loading && !node.items) return <div className="tree-loading">Yükleniyor…</div>
   if (node.error) return <div className="tree-error">Hata: {node.error}</div>
@@ -155,13 +230,14 @@ function BirimList({ parentKey, query, node, nodes, expanded, toggle, loadMore, 
         const key = `bir:${b.id ?? b.detsisNo}`
         const isOpen = expanded.has(key)
         const child = nodes[key]
+        const childQuery = { ...filterParams, ustBirimId: b.id ?? b.detsisNo }
         return (
           <li key={key} className="tree-node">
             <div className="tree-row">
               <button
                 type="button"
                 className="caret"
-                onClick={() => toggle(key, { ustBirimId: b.id ?? b.detsisNo })}
+                onClick={() => toggle(key, childQuery)}
                 aria-label={isOpen ? 'Kapat' : 'Aç'}
               >
                 {isOpen ? '▼' : '▶'}
@@ -181,12 +257,13 @@ function BirimList({ parentKey, query, node, nodes, expanded, toggle, loadMore, 
             {isOpen && (
               <BirimList
                 parentKey={key}
-                query={{ ustBirimId: b.id ?? b.detsisNo }}
+                query={childQuery}
                 node={child}
                 nodes={nodes}
                 expanded={expanded}
                 toggle={toggle}
                 loadMore={loadMore}
+                filterParams={filterParams}
                 onSelect={onSelect}
               />
             )}

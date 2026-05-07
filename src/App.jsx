@@ -471,6 +471,11 @@ export default function App() {
             )}
             {treeOpen && (
               <Tree
+                key={`${filters.ilId || ''}-${filters.ilceId || ''}`}
+                ilId={filters.ilId}
+                ilceId={filters.ilceId}
+                ilAdi={iller.find((x) => String(x.uavtKod) === String(filters.ilId))?.uavtAd}
+                ilceAdi={ilceler.find((x) => String(x.uavtKod) === String(filters.ilceId))?.uavtAd}
                 onSelect={(b) => {
                   selectUstBirim(b)
                   setTreeOpen(false)

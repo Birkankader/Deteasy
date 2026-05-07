@@ -116,6 +116,16 @@ html, body, #root {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
+.tree-hint .chip {
+  display: inline-block;
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent);
+  border: 1px solid #1e40af;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  margin: 0 2px;
+}
 .tree-list, .tree ul {
   list-style: none;
   margin: 0;
