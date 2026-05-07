@@ -19,6 +19,7 @@ const ROOT_CATEGORIES = [
   { id: 205, ad: 'İl Özel İdaresi' },
   { id: 202, ad: 'Mahalli İdarelere Bağlı Kuruluş' },
   { id: 221, ad: 'Mülki İdareye Bağlı Kuruluş' },
+  { id: 214, ad: 'Şirket' },
 ]
 
 const PAGE = API_MAX_PAGE_SIZE

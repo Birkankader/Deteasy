@@ -10,6 +10,16 @@ import {
 import Tree from './Tree.jsx'
 
 const PAGE_SIZE_OPTIONS = [15, 25, 50, 100, 250, 500, 1000]
+const QUICK_PRESETS = [
+  { kategoriId: 19, ad: 'Bakanlıklar' },
+  { kategoriId: 204, ad: 'Belediyeler' },
+  { kategoriId: 214, ad: 'Şirketler' },
+  { kategoriId: 132, ad: 'Üniversiteler' },
+  { kategoriId: 17, ad: 'Cumhurbaşkanlığı' },
+  { kategoriId: 125, ad: 'Yüksek Yargı' },
+  { kategoriId: 16, ad: 'TBMM' },
+  { kategoriId: 205, ad: 'İl Özel İdaresi' },
+]
 const FETCH_LIMIT_OPTIONS = [
   { value: 100, label: '100' },
   { value: 500, label: '500' },
@@ -143,6 +153,14 @@ export default function App() {
     setKategoriQuery('')
     setKategoriler([])
     setFilters((f) => ({ ...f, kategoriId: '', statuId: '' }))
+  }
+
+  function applyPreset(preset) {
+    setSelectedKategori({ id: preset.kategoriId, ad: preset.ad, statuListesi: [] })
+    setKategoriQuery(preset.ad)
+    setKategoriOpen(false)
+    setKategoriler([])
+    setFilters((f) => ({ ...f, kategoriId: preset.kategoriId, statuId: '' }))
   }
 
   function selectUstBirim(b) {
@@ -333,6 +351,23 @@ export default function App() {
       </header>
 
       <form className="filters" onSubmit={onSubmit}>
+        <div className="presets">
+          <span className="presets-label">Hızlı:</span>
+          {QUICK_PRESETS.map((p) => (
+            <button
+              key={p.kategoriId}
+              type="button"
+              className={
+                'preset' +
+                (String(filters.kategoriId) === String(p.kategoriId) ? ' active' : '')
+              }
+              onClick={() => applyPreset(p)}
+            >
+              {p.ad}
+            </button>
+          ))}
+        </div>
+
         <div className="row">
           <label>
             <span>İl</span>
