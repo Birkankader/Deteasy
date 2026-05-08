@@ -333,10 +333,40 @@ export default function App() {
     setSort({ key: null, dir: 'asc' })
   }
 
+  function buildExportRecords() {
+    if (!dataset) return []
+    const useFiltered = !!(textFilter.trim() || sort.key)
+    return useFiltered ? sortedAll : dataset.all
+  }
+
+  function buildFilenameSlug() {
+    const slugParts = [
+      filters.ilId && `il${filters.ilId}`,
+      filters.ilceId && `ilce${filters.ilceId}`,
+      filters.kategoriId && `kat${filters.kategoriId}`,
+      filters.statuId && `statu${filters.statuId}`,
+      filters.ustBirimId && `ust${filters.ustBirimId}`,
+      filters.birimAdi && filters.birimAdi.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 20),
+    ].filter(Boolean)
+    const slug = slugParts.join('_') || 'tum'
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    return `${slug}_${stamp}`
+  }
+
+  function triggerDownload(blob, fname) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fname
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   function downloadJson() {
     if (!dataset) return
-    const useFiltered = !!(textFilter.trim() || sort.key)
-    const records = useFiltered ? sortedAll : dataset.all
+    const records = buildExportRecords()
     const payload = {
       fetchedAt: new Date().toISOString(),
       source: 'yetkiliapi.detsis.gov.tr',
@@ -349,26 +379,50 @@ export default function App() {
       sort: sort.key ? sort : null,
       records,
     }
-    const slugParts = [
-      filters.ilId && `il${filters.ilId}`,
-      filters.ilceId && `ilce${filters.ilceId}`,
-      filters.kategoriId && `kat${filters.kategoriId}`,
-      filters.statuId && `statu${filters.statuId}`,
-      filters.birimAdi && filters.birimAdi.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 20),
-    ].filter(Boolean)
-    const slug = slugParts.join('_') || 'tum'
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-    const fname = `detsis_${slug}_${stamp}.json`
-
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fname
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    triggerDownload(blob, `detsis_${buildFilenameSlug()}.json`)
+  }
+
+  function downloadCsv() {
+    if (!dataset) return
+    const records = buildExportRecords()
+    const headers = [
+      'DETSİS No',
+      'Birim Adı',
+      'İngilizce Adı',
+      'Kategori',
+      'Statü',
+      'Ülke',
+      'İl',
+      'İlçe',
+      'Hiyerarşi',
+    ]
+    const rows = records.map((b) => [
+      b.detsisNo,
+      b.birimAdi,
+      b.ingilizceAdi,
+      b.kategoriAdi,
+      b.statuAdi,
+      b.ulkeAdi,
+      b.ilAdi,
+      b.ilceAdi,
+      b.kurumHiyerarsisi,
+    ])
+    const sep = ';'
+    const escape = (v) => {
+      if (v == null) return ''
+      let s = String(v)
+      // strip control chars Excel chokes on, normalise newlines
+      s = s.replace(/\r\n|\n|\r/g, ' ').replace(/\t/g, ' ')
+      if (s.includes(sep) || s.includes('"') || s.includes('\n')) {
+        s = '"' + s.replace(/"/g, '""') + '"'
+      }
+      return s
+    }
+    const lines = [headers, ...rows].map((row) => row.map(escape).join(sep))
+    const csv = '﻿' + lines.join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    triggerDownload(blob, `detsis_${buildFilenameSlug()}.csv`)
   }
 
   const COLS = [
@@ -680,6 +734,9 @@ export default function App() {
                   Sıralamayı temizle
                 </button>
               )}
+              <button type="button" className="ghost" onClick={downloadCsv}>
+                CSV (Excel) indir
+              </button>
               <button type="button" className="ghost" onClick={downloadJson}>
                 JSON indir
               </button>
