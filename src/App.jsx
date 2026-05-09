@@ -419,8 +419,10 @@ export default function App() {
 
   function buildExportRecords() {
     if (!dataset) return []
-    const useFiltered = !!(textFilter.trim() || sort.key)
-    return useFiltered ? sortedAll : dataset.all
+    // sortedAll always reflects the full pipeline: parentFilters → textFilter
+    // → sort. When nothing is active it equals dataset.all, so a single source
+    // is always correct.
+    return sortedAll
   }
 
   function buildFilenameSlug() {
