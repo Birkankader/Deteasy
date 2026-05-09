@@ -766,10 +766,10 @@ export default function App() {
                           {' '}· {cached.set.size.toLocaleString('tr-TR')} ad
                         </em>
                       )}
-                      <div className="seg-toggle" role="group" aria-label="Eşleşme modu">
+                      <div className="seg-toggle icon" role="group" aria-label="Eşleşme modu">
                         <button
                           type="button"
-                          className={'seg' + (pf.mode === 'is' ? ' active' : '')}
+                          className={'seg ok' + (pf.mode === 'is' ? ' active' : '')}
                           onClick={() =>
                             setParentFilters((arr) =>
                               arr.map((x) =>
@@ -778,12 +778,13 @@ export default function App() {
                             )
                           }
                           title="Atalarında bu kategori VARSA kalsın"
+                          aria-label="Var"
                         >
-                          İçinde
+                          ✓
                         </button>
                         <button
                           type="button"
-                          className={'seg' + (pf.mode === 'not' ? ' active not' : '')}
+                          className={'seg no' + (pf.mode === 'not' ? ' active' : '')}
                           onClick={() =>
                             setParentFilters((arr) =>
                               arr.map((x) =>
@@ -792,8 +793,9 @@ export default function App() {
                             )
                           }
                           title="Atalarında bu kategori YOKSA kalsın"
+                          aria-label="Yok"
                         >
-                          Değil
+                          ✗
                         </button>
                       </div>
                       <button
