@@ -432,6 +432,49 @@ button.ghost:hover { background: var(--panel-2); color: var(--accent); }
   text-transform: none;
   letter-spacing: 0;
 }
+
+.combo {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.combo > select {
+  flex: 1;
+  min-width: 0;
+}
+.seg-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.seg {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.seg:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--accent);
+}
+.seg.active {
+  background: var(--accent);
+  color: #07111d;
+}
+.seg.active.not {
+  background: var(--danger);
+  color: #1a0606;
+}
+.seg:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.seg + .seg { border-left: 1px solid var(--border); }
 .meta {
   color: var(--muted);
   font-size: 13px;

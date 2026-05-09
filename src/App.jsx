@@ -57,6 +57,7 @@ export default function App() {
   })
 
   const [parentKategoriId, setParentKategoriId] = useState('')
+  const [parentMatchMode, setParentMatchMode] = useState('is') // 'is' | 'not'
   const [parentNamesCache, setParentNamesCache] = useState({}) // { [kategoriId]: { loading, set, error, total } }
 
   const [pageSize, setPageSize] = useState(25)
@@ -323,22 +324,27 @@ export default function App() {
 
   const parentFilteredAll = useMemo(() => {
     if (!parentKategoriId || !parentSet) return baseAll
+    const negate = parentMatchMode === 'not'
     return baseAll.filter((b) => {
       const h = b.kurumHiyerarsisi || ''
       // Walk EVERY ancestor in the hierarchy path "Root > P1 > P2 > ... > Self".
-      // Drop the last segment (the unit itself) and check every remaining
-      // ancestor against the cached name set. As soon as ANY ancestor matches,
-      // include the row. We don't stop at the first parent — the chain may be
-      // 3+ levels deep (e.g. Şirket under İktisadi İşletme under İl Özel İdaresi).
+      // Drop the last segment (the unit itself); check every remaining ancestor
+      // against the cached name set. We don't stop at the first parent —
+      // the chain may be 3+ levels deep (e.g. Şirket under İktisadi İşletme
+      // under İl Özel İdaresi).
+      // negate=true ('Değilse'): include rows with NO matching ancestor.
       const segments = h.split(' > ').map(normalizeName).filter(Boolean)
-      if (segments.length < 2) return false
-      const ancestors = segments.slice(0, -1)
+      const ancestors = segments.length >= 2 ? segments.slice(0, -1) : []
+      let hit = false
       for (const seg of ancestors) {
-        if (parentSet.has(seg)) return true
+        if (parentSet.has(seg)) {
+          hit = true
+          break
+        }
       }
-      return false
+      return negate ? !hit : hit
     })
-  }, [baseAll, parentKategoriId, parentSet])
+  }, [baseAll, parentKategoriId, parentSet, parentMatchMode])
 
   const filteredAll = useMemo(() => {
     const q = textFilter.trim()
@@ -444,6 +450,9 @@ export default function App() {
       fetchedAt: new Date().toISOString(),
       source: 'yetkiliapi.detsis.gov.tr',
       filters,
+      ancestorFilter: parentKategoriId
+        ? { kategoriId: parentKategoriId, mode: parentMatchMode }
+        : null,
       textFilter: textFilter.trim() || null,
       totalCount: dataset.totalCount,
       loadedCount: dataset.all.length,
@@ -713,17 +722,39 @@ export default function App() {
                 </em>
               )}
             </span>
-            <select
-              value={parentKategoriId}
-              onChange={(e) => setParentKategoriId(e.target.value)}
-            >
-              <option value="">— Yok —</option>
-              {ROOT_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.ad}
-                </option>
-              ))}
-            </select>
+            <div className="combo">
+              <select
+                value={parentKategoriId}
+                onChange={(e) => setParentKategoriId(e.target.value)}
+              >
+                <option value="">— Yok —</option>
+                {ROOT_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.ad}
+                  </option>
+                ))}
+              </select>
+              <div className="seg-toggle" role="group" aria-label="Eşleşme modu">
+                <button
+                  type="button"
+                  className={'seg' + (parentMatchMode === 'is' ? ' active' : '')}
+                  onClick={() => setParentMatchMode('is')}
+                  disabled={!parentKategoriId}
+                  title="Atalarında bu kategori VARSA kalsın"
+                >
+                  İçinde
+                </button>
+                <button
+                  type="button"
+                  className={'seg' + (parentMatchMode === 'not' ? ' active not' : '')}
+                  onClick={() => setParentMatchMode('not')}
+                  disabled={!parentKategoriId}
+                  title="Atalarında bu kategori YOKSA kalsın"
+                >
+                  Değil
+                </button>
+              </div>
+            </div>
           </label>
 
           <label className="grow">
@@ -836,7 +867,7 @@ export default function App() {
             {dataset.complete ? '' : ' (akıyor…)'} ·
             {parentKategoriId && parentSet && (
               <>
-                {' '}ata zincirinde:{' '}
+                {' '}ata zincirinde{parentMatchMode === 'not' ? ' DEĞİL' : ''}:{' '}
                 <strong>
                   {ROOT_CATEGORIES.find((c) => String(c.id) === String(parentKategoriId))?.ad}
                 </strong>
