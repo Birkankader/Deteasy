@@ -13,6 +13,13 @@ export const BUTCE_TURLERI = [
 ]
 
 // Reused by Tree (root nodes) and App (parent kategori filter).
+// Whitespace-collapse + lowercase tr. Used to compare hierarchy segments
+// against cached parent unit names so trailing tabs / double spaces don't
+// cause false negatives.
+export function normalizeName(s) {
+  return (s || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('tr')
+}
+
 export const ROOT_CATEGORIES = [
   { id: 17, ad: 'Cumhurbaşkanlığı' },
   { id: 19, ad: 'Bakanlık' },

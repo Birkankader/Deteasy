@@ -8,6 +8,7 @@ import {
   API_MAX_PAGE_SIZE,
   BUTCE_TURLERI,
   ROOT_CATEGORIES,
+  normalizeName,
 } from './api.js'
 import Tree from './Tree.jsx'
 
@@ -148,7 +149,7 @@ export default function App() {
         if (cancelled) return
         const set = new Set(
           (r.data || [])
-            .map((b) => (b.birimAdi || '').trim().toLocaleLowerCase('tr'))
+            .map((b) => normalizeName(b.birimAdi))
             .filter(Boolean)
         )
         setParentNamesCache((c) => ({
@@ -324,12 +325,18 @@ export default function App() {
     if (!parentKategoriId || !parentSet) return baseAll
     return baseAll.filter((b) => {
       const h = b.kurumHiyerarsisi || ''
-      // Path segments split by " > ", trim and lowercase. The last segment is the
-      // unit itself; we want any *ancestor* segment to match.
-      const segments = h.split(' > ').map((s) => s.trim().toLocaleLowerCase('tr'))
+      // Walk EVERY ancestor in the hierarchy path "Root > P1 > P2 > ... > Self".
+      // Drop the last segment (the unit itself) and check every remaining
+      // ancestor against the cached name set. As soon as ANY ancestor matches,
+      // include the row. We don't stop at the first parent — the chain may be
+      // 3+ levels deep (e.g. Şirket under İktisadi İşletme under İl Özel İdaresi).
+      const segments = h.split(' > ').map(normalizeName).filter(Boolean)
       if (segments.length < 2) return false
       const ancestors = segments.slice(0, -1)
-      return ancestors.some((seg) => parentSet.has(seg))
+      for (const seg of ancestors) {
+        if (parentSet.has(seg)) return true
+      }
+      return false
     })
   }, [baseAll, parentKategoriId, parentSet])
 
@@ -698,7 +705,7 @@ export default function App() {
 
           <label>
             <span>
-              Üst birim kategorisi (post-filter)
+              Ata kategorisi (hiyerarşinin herhangi bir seviyesinde)
               {parentLoading && <em className="muted-inline"> · yükleniyor…</em>}
               {parentSet && parentKategoriId && (
                 <em className="muted-inline">
@@ -829,7 +836,7 @@ export default function App() {
             {dataset.complete ? '' : ' (akıyor…)'} ·
             {parentKategoriId && parentSet && (
               <>
-                {' '}üst birim kategorisi:{' '}
+                {' '}ata zincirinde:{' '}
                 <strong>
                   {ROOT_CATEGORIES.find((c) => String(c.id) === String(parentKategoriId))?.ad}
                 </strong>
