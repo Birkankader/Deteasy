@@ -75,6 +75,7 @@ export default function App() {
   const debounceRef = useRef(null)
   const ustBirimDebounceRef = useRef(null)
   const abortRef = useRef(null)
+  const parentInFlightRef = useRef(new Set())
 
   useEffect(() => {
     getIller()
@@ -132,19 +133,26 @@ export default function App() {
   )
 
   useEffect(() => {
-    let cancelled = false
     parentFilters.forEach((pf) => {
       const id = String(pf.kategoriId)
+      // Skip if already cached or actively fetching. Identity tracked via ref so
+      // re-running the effect (e.g. on chip mode toggle / removal) doesn't fire
+      // duplicate aggregates.
+      if (parentInFlightRef.current.has(id)) return
       const cached = parentNamesCache[id]
-      if (cached?.set || cached?.loading) return
-      setParentNamesCache((c) => ({ ...c, [id]: { loading: true, set: null, total: 0 } }))
+      if (cached?.set) return
+
+      parentInFlightRef.current.add(id)
+      setParentNamesCache((c) => ({
+        ...c,
+        [id]: { loading: true, set: null, total: 0 },
+      }))
 
       getBirimlerAggregate(
         { kategoriId: pf.kategoriId },
-        { limit: 'all', concurrency: 3 }
+        { limit: 'all', concurrency: 5 }
       )
         .then((r) => {
-          if (cancelled) return
           const set = new Set(
             (r.data || []).map((b) => normalizeName(b.birimAdi)).filter(Boolean)
           )
@@ -154,16 +162,15 @@ export default function App() {
           }))
         })
         .catch((e) => {
-          if (cancelled) return
           setParentNamesCache((c) => ({
             ...c,
             [id]: { loading: false, set: null, error: e.message },
           }))
         })
+        .finally(() => {
+          parentInFlightRef.current.delete(id)
+        })
     })
-    return () => {
-      cancelled = true
-    }
   }, [parentFilters])
 
   const hasFilter =
@@ -878,6 +885,16 @@ export default function App() {
 
         {error && <div className="error">{error}</div>}
       </form>
+
+      {anyParentLoading && (
+        <div className="warn">
+          <span>
+            Ata kategori cache yükleniyor — filtre tüm cache'ler hazır olmadan
+            tam etkili olmayacak. Şu an{' '}
+            {readyParentFilters.length} / {parentFilters.length} hazır.
+          </span>
+        </div>
+      )}
 
       {dataset?.failedPages?.length > 0 && (
         <div className="warn">
