@@ -56,8 +56,8 @@ export default function App() {
     butceTuruId: '',
   })
 
-  const [parentKategoriId, setParentKategoriId] = useState('')
-  const [parentMatchMode, setParentMatchMode] = useState('is') // 'is' | 'not'
+  const [parentFilters, setParentFilters] = useState([]) // [{ kategoriId: '205', mode: 'is' | 'not' }, ...]
+  const [parentDraft, setParentDraft] = useState('')
   const [parentNamesCache, setParentNamesCache] = useState({}) // { [kategoriId]: { loading, set, error, total } }
 
   const [pageSize, setPageSize] = useState(25)
@@ -132,44 +132,39 @@ export default function App() {
   )
 
   useEffect(() => {
-    if (!parentKategoriId) return
-    const id = String(parentKategoriId)
-    if (parentNamesCache[id]?.set || parentNamesCache[id]?.loading) return
-
-    setParentNamesCache((c) => ({ ...c, [id]: { loading: true, set: null, total: 0 } }))
-
     let cancelled = false
-    getBirimlerAggregate(
-      { kategoriId: parentKategoriId },
-      {
-        limit: 'all',
-        concurrency: 3,
-      }
-    )
-      .then((r) => {
-        if (cancelled) return
-        const set = new Set(
-          (r.data || [])
-            .map((b) => normalizeName(b.birimAdi))
-            .filter(Boolean)
-        )
-        setParentNamesCache((c) => ({
-          ...c,
-          [id]: { loading: false, set, total: r.totalCount },
-        }))
-      })
-      .catch((e) => {
-        if (cancelled) return
-        setParentNamesCache((c) => ({
-          ...c,
-          [id]: { loading: false, set: null, error: e.message },
-        }))
-      })
+    parentFilters.forEach((pf) => {
+      const id = String(pf.kategoriId)
+      const cached = parentNamesCache[id]
+      if (cached?.set || cached?.loading) return
+      setParentNamesCache((c) => ({ ...c, [id]: { loading: true, set: null, total: 0 } }))
 
+      getBirimlerAggregate(
+        { kategoriId: pf.kategoriId },
+        { limit: 'all', concurrency: 3 }
+      )
+        .then((r) => {
+          if (cancelled) return
+          const set = new Set(
+            (r.data || []).map((b) => normalizeName(b.birimAdi)).filter(Boolean)
+          )
+          setParentNamesCache((c) => ({
+            ...c,
+            [id]: { loading: false, set, total: r.totalCount },
+          }))
+        })
+        .catch((e) => {
+          if (cancelled) return
+          setParentNamesCache((c) => ({
+            ...c,
+            [id]: { loading: false, set: null, error: e.message },
+          }))
+        })
+    })
     return () => {
       cancelled = true
     }
-  }, [parentKategoriId])
+  }, [parentFilters])
 
   const hasFilter =
     filters.ilId ||
@@ -315,36 +310,39 @@ export default function App() {
 
   const baseAll = dataset?.all || []
 
-  const parentSet = parentKategoriId
-    ? parentNamesCache[String(parentKategoriId)]?.set || null
-    : null
-  const parentLoading = parentKategoriId
-    ? parentNamesCache[String(parentKategoriId)]?.loading
-    : false
+  // Resolve every active parent filter to its cached name set.
+  // anyParentLoading: true while at least one chip's cache is still loading.
+  const resolvedParentFilters = parentFilters.map((pf) => {
+    const cached = parentNamesCache[String(pf.kategoriId)]
+    return { ...pf, set: cached?.set || null, loading: !!cached?.loading }
+  })
+  const anyParentLoading = resolvedParentFilters.some((p) => p.loading)
+  const readyParentFilters = resolvedParentFilters.filter((p) => p.set)
 
   const parentFilteredAll = useMemo(() => {
-    if (!parentKategoriId || !parentSet) return baseAll
-    const negate = parentMatchMode === 'not'
+    if (readyParentFilters.length === 0) return baseAll
     return baseAll.filter((b) => {
       const h = b.kurumHiyerarsisi || ''
       // Walk EVERY ancestor in the hierarchy path "Root > P1 > P2 > ... > Self".
-      // Drop the last segment (the unit itself); check every remaining ancestor
-      // against the cached name set. We don't stop at the first parent —
-      // the chain may be 3+ levels deep (e.g. Şirket under İktisadi İşletme
-      // under İl Özel İdaresi).
-      // negate=true ('Değilse'): include rows with NO matching ancestor.
+      // Drop the last segment (the unit itself) — we want only ancestors.
       const segments = h.split(' > ').map(normalizeName).filter(Boolean)
       const ancestors = segments.length >= 2 ? segments.slice(0, -1) : []
-      let hit = false
-      for (const seg of ancestors) {
-        if (parentSet.has(seg)) {
-          hit = true
-          break
+      // AND semantics across chips:
+      //   mode 'is':  at least one ancestor must be in the chip's name set
+      //   mode 'not': NO ancestor may be in the chip's name set
+      for (const pf of readyParentFilters) {
+        let hit = false
+        for (const seg of ancestors) {
+          if (pf.set.has(seg)) {
+            hit = true
+            break
+          }
         }
+        if (pf.mode === 'not' ? hit : !hit) return false
       }
-      return negate ? !hit : hit
+      return true
     })
-  }, [baseAll, parentKategoriId, parentSet, parentMatchMode])
+  }, [baseAll, readyParentFilters])
 
   const filteredAll = useMemo(() => {
     const q = textFilter.trim()
@@ -397,7 +395,7 @@ export default function App() {
 
   useEffect(() => {
     setPage(1)
-  }, [textFilter, parentKategoriId])
+  }, [textFilter, parentFilters])
 
   function toggleSort(key) {
     setSort((s) =>
@@ -450,9 +448,7 @@ export default function App() {
       fetchedAt: new Date().toISOString(),
       source: 'yetkiliapi.detsis.gov.tr',
       filters,
-      ancestorFilter: parentKategoriId
-        ? { kategoriId: parentKategoriId, mode: parentMatchMode }
-        : null,
+      ancestorFilters: parentFilters.length > 0 ? parentFilters : null,
       textFilter: textFilter.trim() || null,
       totalCount: dataset.totalCount,
       loadedCount: dataset.all.length,
@@ -714,47 +710,102 @@ export default function App() {
 
           <label>
             <span>
-              Ata kategorisi (hiyerarşinin herhangi bir seviyesinde)
-              {parentLoading && <em className="muted-inline"> · yükleniyor…</em>}
-              {parentSet && parentKategoriId && (
-                <em className="muted-inline">
-                  {' '}· {parentSet.size.toLocaleString('tr-TR')} ad cache'de
-                </em>
-              )}
+              Ata kategori filtreleri (her biri AND, hiyerarşinin herhangi bir seviyesinde)
+              {anyParentLoading && <em className="muted-inline"> · yükleniyor…</em>}
             </span>
             <div className="combo">
               <select
-                value={parentKategoriId}
-                onChange={(e) => setParentKategoriId(e.target.value)}
+                value={parentDraft}
+                onChange={(e) => setParentDraft(e.target.value)}
               >
-                <option value="">— Yok —</option>
-                {ROOT_CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.ad}
-                  </option>
-                ))}
+                <option value="">— Kategori seç —</option>
+                {ROOT_CATEGORIES
+                  .filter((c) => !parentFilters.some((pf) => String(pf.kategoriId) === String(c.id)))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.ad}
+                    </option>
+                  ))}
               </select>
-              <div className="seg-toggle" role="group" aria-label="Eşleşme modu">
-                <button
-                  type="button"
-                  className={'seg' + (parentMatchMode === 'is' ? ' active' : '')}
-                  onClick={() => setParentMatchMode('is')}
-                  disabled={!parentKategoriId}
-                  title="Atalarında bu kategori VARSA kalsın"
-                >
-                  İçinde
-                </button>
-                <button
-                  type="button"
-                  className={'seg' + (parentMatchMode === 'not' ? ' active not' : '')}
-                  onClick={() => setParentMatchMode('not')}
-                  disabled={!parentKategoriId}
-                  title="Atalarında bu kategori YOKSA kalsın"
-                >
-                  Değil
-                </button>
-              </div>
+              <button
+                type="button"
+                className="ghost"
+                disabled={!parentDraft}
+                onClick={() => {
+                  const id = parentDraft
+                  if (!id) return
+                  if (parentFilters.some((pf) => String(pf.kategoriId) === String(id))) return
+                  setParentFilters((arr) => [...arr, { kategoriId: id, mode: 'is' }])
+                  setParentDraft('')
+                }}
+              >
+                + Ekle
+              </button>
             </div>
+            {parentFilters.length > 0 && (
+              <div className="parent-chips">
+                {parentFilters.map((pf) => {
+                  const cat = ROOT_CATEGORIES.find((c) => String(c.id) === String(pf.kategoriId))
+                  const cached = parentNamesCache[String(pf.kategoriId)]
+                  return (
+                    <div
+                      key={pf.kategoriId}
+                      className={'parent-chip' + (pf.mode === 'not' ? ' not' : '')}
+                    >
+                      <span className="pc-name">{cat?.ad || `#${pf.kategoriId}`}</span>
+                      {cached?.loading && <em className="muted-inline"> · yükleniyor…</em>}
+                      {cached?.set && (
+                        <em className="muted-inline">
+                          {' '}· {cached.set.size.toLocaleString('tr-TR')} ad
+                        </em>
+                      )}
+                      <div className="seg-toggle" role="group" aria-label="Eşleşme modu">
+                        <button
+                          type="button"
+                          className={'seg' + (pf.mode === 'is' ? ' active' : '')}
+                          onClick={() =>
+                            setParentFilters((arr) =>
+                              arr.map((x) =>
+                                x.kategoriId === pf.kategoriId ? { ...x, mode: 'is' } : x
+                              )
+                            )
+                          }
+                          title="Atalarında bu kategori VARSA kalsın"
+                        >
+                          İçinde
+                        </button>
+                        <button
+                          type="button"
+                          className={'seg' + (pf.mode === 'not' ? ' active not' : '')}
+                          onClick={() =>
+                            setParentFilters((arr) =>
+                              arr.map((x) =>
+                                x.kategoriId === pf.kategoriId ? { ...x, mode: 'not' } : x
+                              )
+                            )
+                          }
+                          title="Atalarında bu kategori YOKSA kalsın"
+                        >
+                          Değil
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className="pc-remove"
+                        onClick={() =>
+                          setParentFilters((arr) =>
+                            arr.filter((x) => x.kategoriId !== pf.kategoriId)
+                          )
+                        }
+                        aria-label="Kaldır"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </label>
 
           <label className="grow">
@@ -865,11 +916,18 @@ export default function App() {
             <strong>{dataset.totalCount.toLocaleString('tr-TR')}</strong> sonuç ·
             yüklendi: {totalLoaded.toLocaleString('tr-TR')} kayıt
             {dataset.complete ? '' : ' (akıyor…)'} ·
-            {parentKategoriId && parentSet && (
+            {readyParentFilters.length > 0 && (
               <>
-                {' '}ata zincirinde{parentMatchMode === 'not' ? ' DEĞİL' : ''}:{' '}
+                {' '}ata filtresi:{' '}
                 <strong>
-                  {ROOT_CATEGORIES.find((c) => String(c.id) === String(parentKategoriId))?.ad}
+                  {readyParentFilters
+                    .map((pf) => {
+                      const cat = ROOT_CATEGORIES.find(
+                        (c) => String(c.id) === String(pf.kategoriId)
+                      )
+                      return (pf.mode === 'not' ? '!' : '') + (cat?.ad || pf.kategoriId)
+                    })
+                    .join(' ∧ ')}
                 </strong>
                 {' '}({parentFilteredAll.length.toLocaleString('tr-TR')}) ·
               </>
