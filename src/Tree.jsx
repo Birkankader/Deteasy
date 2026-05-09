@@ -1,26 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { API_MAX_PAGE_SIZE } from './api.js'
-
-const ROOT_CATEGORIES = [
-  { id: 17, ad: 'Cumhurbaşkanlığı' },
-  { id: 19, ad: 'Bakanlık' },
-  { id: 16, ad: 'TBMM Başkanlığı' },
-  { id: 125, ad: 'Yüksek Yargı Kuruluşu' },
-  { id: 210, ad: 'Bağımsız/Düzenleyici Denetleyici Kuruluş' },
-  { id: 127, ad: 'Bağlı Kuruluş' },
-  { id: 128, ad: 'İlgili Kuruluş' },
-  { id: 129, ad: 'İlişkili Kuruluş' },
-  { id: 131, ad: 'Koordine Kuruluş' },
-  { id: 132, ad: 'Yükseköğretim Kurumu' },
-  { id: 18, ad: 'Başbakanlık' },
-  { id: 136, ad: 'Özelleştirme Kapsamındaki Kuruluş' },
-  { id: 223, ad: 'Tasfiye Halinde Kuruluş' },
-  { id: 204, ad: 'Belediye' },
-  { id: 205, ad: 'İl Özel İdaresi' },
-  { id: 202, ad: 'Mahalli İdarelere Bağlı Kuruluş' },
-  { id: 221, ad: 'Mülki İdareye Bağlı Kuruluş' },
-  { id: 214, ad: 'Şirket' },
-]
+import { API_MAX_PAGE_SIZE, ROOT_CATEGORIES } from './api.js'
 
 const PAGE = API_MAX_PAGE_SIZE
 

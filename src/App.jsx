@@ -6,6 +6,8 @@ import {
   searchBirimler,
   getBirimlerAggregate,
   API_MAX_PAGE_SIZE,
+  BUTCE_TURLERI,
+  ROOT_CATEGORIES,
 } from './api.js'
 import Tree from './Tree.jsx'
 
@@ -50,7 +52,11 @@ export default function App() {
     statuId: '',
     birimAdi: '',
     ustBirimId: '',
+    butceTuruId: '',
   })
+
+  const [parentKategoriId, setParentKategoriId] = useState('')
+  const [parentNamesCache, setParentNamesCache] = useState({}) // { [kategoriId]: { loading, set, error, total } }
 
   const [pageSize, setPageSize] = useState(25)
   const [showAll, setShowAll] = useState(false)
@@ -122,6 +128,46 @@ export default function App() {
     () => selectedKategori?.statuListesi || [],
     [selectedKategori]
   )
+
+  useEffect(() => {
+    if (!parentKategoriId) return
+    const id = String(parentKategoriId)
+    if (parentNamesCache[id]?.set || parentNamesCache[id]?.loading) return
+
+    setParentNamesCache((c) => ({ ...c, [id]: { loading: true, set: null, total: 0 } }))
+
+    let cancelled = false
+    getBirimlerAggregate(
+      { kategoriId: parentKategoriId },
+      {
+        limit: 'all',
+        concurrency: 3,
+      }
+    )
+      .then((r) => {
+        if (cancelled) return
+        const set = new Set(
+          (r.data || [])
+            .map((b) => (b.birimAdi || '').trim().toLocaleLowerCase('tr'))
+            .filter(Boolean)
+        )
+        setParentNamesCache((c) => ({
+          ...c,
+          [id]: { loading: false, set, total: r.totalCount },
+        }))
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setParentNamesCache((c) => ({
+          ...c,
+          [id]: { loading: false, set: null, error: e.message },
+        }))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [parentKategoriId])
 
   const hasFilter =
     filters.ilId ||
@@ -267,11 +313,31 @@ export default function App() {
 
   const baseAll = dataset?.all || []
 
+  const parentSet = parentKategoriId
+    ? parentNamesCache[String(parentKategoriId)]?.set || null
+    : null
+  const parentLoading = parentKategoriId
+    ? parentNamesCache[String(parentKategoriId)]?.loading
+    : false
+
+  const parentFilteredAll = useMemo(() => {
+    if (!parentKategoriId || !parentSet) return baseAll
+    return baseAll.filter((b) => {
+      const h = b.kurumHiyerarsisi || ''
+      // Path segments split by " > ", trim and lowercase. The last segment is the
+      // unit itself; we want any *ancestor* segment to match.
+      const segments = h.split(' > ').map((s) => s.trim().toLocaleLowerCase('tr'))
+      if (segments.length < 2) return false
+      const ancestors = segments.slice(0, -1)
+      return ancestors.some((seg) => parentSet.has(seg))
+    })
+  }, [baseAll, parentKategoriId, parentSet])
+
   const filteredAll = useMemo(() => {
     const q = textFilter.trim()
-    if (!q) return baseAll
+    if (!q) return parentFilteredAll
     const lq = q.toLocaleLowerCase('tr')
-    return baseAll.filter((b) => {
+    return parentFilteredAll.filter((b) => {
       return (
         (b.birimAdi && b.birimAdi.toLocaleLowerCase('tr').includes(lq)) ||
         (b.kurumHiyerarsisi && b.kurumHiyerarsisi.toLocaleLowerCase('tr').includes(lq)) ||
@@ -282,7 +348,7 @@ export default function App() {
         String(b.detsisNo || '').includes(q)
       )
     })
-  }, [baseAll, textFilter])
+  }, [parentFilteredAll, textFilter])
 
   const sortedAll = useMemo(() => {
     if (!sort.key) return filteredAll
@@ -318,7 +384,7 @@ export default function App() {
 
   useEffect(() => {
     setPage(1)
-  }, [textFilter])
+  }, [textFilter, parentKategoriId])
 
   function toggleSort(key) {
     setSort((s) =>
@@ -615,6 +681,44 @@ export default function App() {
         </div>
 
         <div className="row">
+          <label>
+            <span>Bütçe Türü</span>
+            <select
+              value={filters.butceTuruId}
+              onChange={(e) => update('butceTuruId', e.target.value)}
+            >
+              <option value="">— Tümü —</option>
+              {BUTCE_TURLERI.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.ad}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>
+              Üst birim kategorisi (post-filter)
+              {parentLoading && <em className="muted-inline"> · yükleniyor…</em>}
+              {parentSet && parentKategoriId && (
+                <em className="muted-inline">
+                  {' '}· {parentSet.size.toLocaleString('tr-TR')} ad cache'de
+                </em>
+              )}
+            </span>
+            <select
+              value={parentKategoriId}
+              onChange={(e) => setParentKategoriId(e.target.value)}
+            >
+              <option value="">— Yok —</option>
+              {ROOT_CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.ad}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="grow">
             <span>Birim Adı (opsiyonel)</span>
             <input
@@ -624,8 +728,10 @@ export default function App() {
               placeholder="örn: zabıta"
             />
           </label>
+        </div>
 
-          <label>
+        <div className="row">
+          <label className="grow">
             <span>Çekilecek</span>
             <select
               value={fetchLimit}
@@ -721,6 +827,15 @@ export default function App() {
             <strong>{dataset.totalCount.toLocaleString('tr-TR')}</strong> sonuç ·
             yüklendi: {totalLoaded.toLocaleString('tr-TR')} kayıt
             {dataset.complete ? '' : ' (akıyor…)'} ·
+            {parentKategoriId && parentSet && (
+              <>
+                {' '}üst birim kategorisi:{' '}
+                <strong>
+                  {ROOT_CATEGORIES.find((c) => String(c.id) === String(parentKategoriId))?.ad}
+                </strong>
+                {' '}({parentFilteredAll.length.toLocaleString('tr-TR')}) ·
+              </>
+            )}
             {textFilter
               ? ` filtre eşleşmesi: ${totalRows.toLocaleString('tr-TR')} ·`
               : ''}

@@ -424,6 +424,14 @@ button.ghost:hover { background: var(--panel-2); color: var(--accent); }
   background: #18222e;
 }
 .text-filter::placeholder { color: var(--muted); }
+
+.muted-inline {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .meta {
   color: var(--muted);
   font-size: 13px;

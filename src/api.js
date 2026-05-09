@@ -1,6 +1,39 @@
 const BASE = '/detsis/api/backoffice'
 export const API_MAX_PAGE_SIZE = 100
 
+// Hardcoded list — Detsis exposes only filter usage, no listing endpoint.
+// IDs verified by probing /birimler?butceTuruId=N totalCount + sample names.
+export const BUTCE_TURLERI = [
+  { id: 1, ad: 'Genel Bütçeli İdare' },
+  { id: 3, ad: 'Özel Bütçeli İdare' },
+  { id: 7, ad: 'Düzenleyici ve Denetleyici Kurum Bütçesi' },
+  { id: 9, ad: 'Sosyal Güvenlik Kurumu Bütçesi' },
+  { id: 10, ad: 'Mahalli İdare Bütçesi' },
+  { id: 12, ad: 'Diğer (Bağlı Ortaklık / Şirket / Döner Sermaye)' },
+]
+
+// Reused by Tree (root nodes) and App (parent kategori filter).
+export const ROOT_CATEGORIES = [
+  { id: 17, ad: 'Cumhurbaşkanlığı' },
+  { id: 19, ad: 'Bakanlık' },
+  { id: 16, ad: 'TBMM Başkanlığı' },
+  { id: 125, ad: 'Yüksek Yargı Kuruluşu' },
+  { id: 210, ad: 'Bağımsız/Düzenleyici Denetleyici Kuruluş' },
+  { id: 127, ad: 'Bağlı Kuruluş' },
+  { id: 128, ad: 'İlgili Kuruluş' },
+  { id: 129, ad: 'İlişkili Kuruluş' },
+  { id: 131, ad: 'Koordine Kuruluş' },
+  { id: 132, ad: 'Yükseköğretim Kurumu' },
+  { id: 18, ad: 'Başbakanlık' },
+  { id: 136, ad: 'Özelleştirme Kapsamındaki Kuruluş' },
+  { id: 223, ad: 'Tasfiye Halinde Kuruluş' },
+  { id: 204, ad: 'Belediye' },
+  { id: 205, ad: 'İl Özel İdaresi' },
+  { id: 202, ad: 'Mahalli İdarelere Bağlı Kuruluş' },
+  { id: 221, ad: 'Mülki İdareye Bağlı Kuruluş' },
+  { id: 214, ad: 'Şirket' },
+]
+
 const DEFAULT_RETRIES = 3
 const REQUEST_TIMEOUT_MS = 25_000
 
@@ -90,6 +123,7 @@ function buildBirimQuery(filters, page, pageSize) {
   if (filters.statuId) qs.set('StatuId', filters.statuId)
   if (filters.birimAdi) qs.set('birimAdi', filters.birimAdi)
   if (filters.ustBirimId) qs.set('ustBirimId', filters.ustBirimId)
+  if (filters.butceTuruId) qs.set('butceTuruId', filters.butceTuruId)
   return qs.toString()
 }
 
