@@ -5,6 +5,9 @@ const TARGET = 'https://yetkiliapi.detsis.gov.tr'
 const ORIGIN = 'https://yetkili.detsis.gov.tr'
 
 export default defineConfig({
+  // Electron loads index.html via file://, so asset URLs must be relative.
+  // Has no impact on dev server which serves from http://localhost.
+  base: './',
   plugins: [react()],
   server: {
     port: 5173,

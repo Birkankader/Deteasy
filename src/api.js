@@ -1,4 +1,9 @@
-const BASE = '/detsis/api/backoffice'
+// Renderer base URL. In dev (Vite) the path '/detsis' is rewritten by the
+// dev server proxy. In Electron prod the preload script exposes
+// window.DETSIS_PROXY_BASE pointing to the local proxy server.
+const PROXY_ROOT =
+  (typeof window !== 'undefined' && window.DETSIS_PROXY_BASE) || '/detsis'
+export const BASE = `${PROXY_ROOT}/api/backoffice`
 export const API_MAX_PAGE_SIZE = 100
 
 // Hardcoded list — Detsis exposes only filter usage, no listing endpoint.

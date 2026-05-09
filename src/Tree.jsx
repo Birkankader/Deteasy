@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { API_MAX_PAGE_SIZE, ROOT_CATEGORIES } from './api.js'
+import { API_MAX_PAGE_SIZE, BASE, ROOT_CATEGORIES } from './api.js'
 
 const PAGE = API_MAX_PAGE_SIZE
 
 async function fetchBirimlerPage(query, page = 1, pageSize = PAGE) {
   const url =
-    '/detsis/api/backoffice/unauthorizedaccessdata/birimler?' +
+    `${BASE}/unauthorizedaccessdata/birimler?` +
     new URLSearchParams({ ...query, page, pageSize }).toString()
   const r = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!r.ok) {
