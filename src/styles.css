@@ -658,6 +658,105 @@ tbody tr:hover { background: rgba(56, 189, 248, 0.04); }
   text-align: center;
 }
 
+.update-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.12), rgba(34, 197, 94, 0.08));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.update-banner .ub-left {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex: 1;
+  min-width: 240px;
+}
+.update-banner .ub-emoji { font-size: 22px; }
+.update-banner .ub-title { font-size: 14px; color: var(--text); }
+.update-banner .ub-title strong { color: var(--accent); }
+.update-banner .ub-cur {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 4px;
+}
+.update-banner .ub-meta {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.update-banner .ub-right {
+  display: flex;
+  gap: 8px;
+}
+.update-banner .ub-primary {
+  background: var(--accent);
+  color: #07111d;
+  padding: 8px 16px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+.update-banner .ub-primary:hover:not(:disabled) { background: var(--accent-2); color: #fff; }
+.update-banner .ub-primary:disabled { background: #475569; color: #cbd5e1; cursor: not-allowed; }
+.update-banner .ub-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.update-banner .ub-ghost:hover { color: var(--text); border-color: var(--accent); }
+
+.update-toast {
+  position: fixed;
+  bottom: 60px;
+  right: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.update-toast.ok {
+  background: #22c55e;
+  color: #052e15;
+}
+.update-toast.err {
+  background: var(--danger);
+  color: #1a0606;
+}
+
+.update-fab {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.update-fab:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.update-fab:disabled { opacity: 0.5; cursor: wait; }
+
 @media (max-width: 900px) {
   .row { grid-template-columns: 1fr 1fr; }
   label.grow { grid-column: span 2; }

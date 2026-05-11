@@ -11,6 +11,7 @@ import {
   normalizeName,
 } from './api.js'
 import Tree from './Tree.jsx'
+import UpdateBanner from './UpdateBanner.jsx'
 
 const PAGE_SIZE_OPTIONS = [15, 25, 50, 100, 250, 500, 1000]
 const QUICK_PRESETS = [
@@ -536,6 +537,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <UpdateBanner />
       <header className="hdr">
         <h1>Deteasy <span className="sub-inline">· DETSİS Birim Arama</span></h1>
         <span className="sub">
