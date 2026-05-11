@@ -5,7 +5,7 @@
 // install on Windows NSIS builds. The renderer drives the install UX via
 // IPC messages.
 
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require('electron')
 const path = require('node:path')
 const http = require('node:http')
 const https = require('node:https')
@@ -179,6 +179,11 @@ async function checkForUpdates(userTriggered = false) {
 async function createWindow() {
   await startProxy()
 
+  // Drop default File/Edit/View/Window/Help menu. On Windows/Linux this hides
+  // the menu bar entirely; on macOS the system menu shrinks to app-name only
+  // (full removal requires platform-specific overrides we don't need).
+  Menu.setApplicationMenu(null)
+
   mainWin = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -186,6 +191,7 @@ async function createWindow() {
     minHeight: 600,
     backgroundColor: '#0f172a',
     title: 'Detseasy',
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
