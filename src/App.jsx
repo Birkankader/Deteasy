@@ -328,24 +328,36 @@ export default function App() {
 
   const parentFilteredAll = useMemo(() => {
     if (readyParentFilters.length === 0) return baseAll
+    const positives = readyParentFilters.filter((p) => p.mode === 'is')
+    const negatives = readyParentFilters.filter((p) => p.mode === 'not')
     return baseAll.filter((b) => {
       const h = b.kurumHiyerarsisi || ''
       // Walk EVERY ancestor in the hierarchy path "Root > P1 > P2 > ... > Self".
       // Drop the last segment (the unit itself) — we want only ancestors.
       const segments = h.split(' > ').map(normalizeName).filter(Boolean)
       const ancestors = segments.length >= 2 ? segments.slice(0, -1) : []
-      // AND semantics across chips:
-      //   mode 'is':  at least one ancestor must be in the chip's name set
-      //   mode 'not': NO ancestor may be in the chip's name set
-      for (const pf of readyParentFilters) {
-        let hit = false
+
+      // Negatives: NONE of these chips may match anywhere in the chain.
+      for (const pf of negatives) {
         for (const seg of ancestors) {
-          if (pf.set.has(seg)) {
-            hit = true
-            break
-          }
+          if (pf.set.has(seg)) return false
         }
-        if (pf.mode === 'not' ? hit : !hit) return false
+      }
+
+      // Positives (OR semantics): if any positive chips are present, at least
+      // ONE of them must match somewhere in the chain.
+      if (positives.length > 0) {
+        let any = false
+        for (const pf of positives) {
+          for (const seg of ancestors) {
+            if (pf.set.has(seg)) {
+              any = true
+              break
+            }
+          }
+          if (any) break
+        }
+        if (!any) return false
       }
       return true
     })
@@ -719,7 +731,7 @@ export default function App() {
 
           <label>
             <span>
-              Ata kategori filtreleri (her biri AND, hiyerarşinin herhangi bir seviyesinde)
+              Ata kategori filtreleri (✓'ler OR — biri ata olsa yeter · ✗'ler hepsi olmamalı)
               {anyParentLoading && <em className="muted-inline"> · yükleniyor…</em>}
             </span>
             <div className="combo">
@@ -941,14 +953,20 @@ export default function App() {
               <>
                 {' '}ata filtresi:{' '}
                 <strong>
-                  {readyParentFilters
-                    .map((pf) => {
-                      const cat = ROOT_CATEGORIES.find(
-                        (c) => String(c.id) === String(pf.kategoriId)
-                      )
-                      return (pf.mode === 'not' ? '!' : '') + (cat?.ad || pf.kategoriId)
-                    })
-                    .join(' ∧ ')}
+                  {(() => {
+                    const name = (id) =>
+                      ROOT_CATEGORIES.find((c) => String(c.id) === String(id))?.ad || id
+                    const pos = readyParentFilters
+                      .filter((p) => p.mode === 'is')
+                      .map((p) => name(p.kategoriId))
+                    const neg = readyParentFilters
+                      .filter((p) => p.mode === 'not')
+                      .map((p) => '!' + name(p.kategoriId))
+                    const parts = []
+                    if (pos.length) parts.push('(' + pos.join(' ∨ ') + ')')
+                    if (neg.length) parts.push(neg.join(' ∧ '))
+                    return parts.join(' ∧ ')
+                  })()}
                 </strong>
                 {' '}({parentFilteredAll.length.toLocaleString('tr-TR')}) ·
               </>
