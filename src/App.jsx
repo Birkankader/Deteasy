@@ -537,7 +537,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="hdr">
-        <h1>DETSİS Birim Arama</h1>
+        <h1>Deteasy <span className="sub-inline">· DETSİS Birim Arama</span></h1>
         <span className="sub">
           API limit 100/sayfa · sonuçlar geldikçe ekrana akar, sayfalama anlık
         </span>

@@ -1,8 +1,8 @@
 {
-  "name": "detsis-explorer",
+  "name": "deteasy",
   "private": true,
   "version": "0.1.0",
-  "description": "DETSİS birim arama masaüstü uygulaması",
+  "description": "Deteasy — DETSİS birim arama masaüstü uygulaması",
   "author": "Birkan Kader",
   "main": "electron/main.cjs",
   "scripts": {
@@ -29,8 +29,8 @@
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "com.birkankader.detsisexplorer",
-    "productName": "Detsis Explorer",
+    "appId": "com.birkankader.deteasy",
+    "productName": "Deteasy",
     "asar": true,
     "directories": {
       "output": "release",

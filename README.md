@@ -1,67 +1,57 @@
-# Detsis Explorer
+# Deteasy
 
 DETSİS (Devlet Teşkilatı Merkezi Kayıt Sistemi) birimlerini filtreleyip incelemek için React + Electron tabanlı masaüstü uygulaması.
 
 ## Özellikler
 
 - İl / İlçe / Kategori / Statü / Üst Birim / Bütçe Türü filtreleri
-- Hiyerarşik ağaç (kök kategoriden başlayarak lazy-load)
-- Çoklu ata kategori filtresi (her biri AND, ✓ Var / ✗ Yok)
-- Sonuçlar geldikçe ekrana akar (streaming)
-- Tüm sayfalar önden çekilir, sayfalama anlık (client-side)
-- Tablo sıralaması, sonuçlarda metin arama
+- Hızlı ön ayar chip'leri (Bakanlıklar, Belediyeler, Şirketler, Üniversiteler, …)
+- Hiyerarşik ağaç ile görsel birim seçimi (lazy-load)
+- Çoklu **ata kategori** filtresi
+  - ✓ pozitif chip'ler aralarında OR (biri ata olsa yeter)
+  - ✗ negatif chip'ler aralarında AND (hiçbiri ata olmamalı)
+- Sonuçlar geldikçe ekrana akar (streaming, paralel 5 worker)
+- Tüm sayfalar önden çekilir, sayfalama anlık (client-side slice)
+- Tablo sıralaması, sonuçlarda metin arama (tr locale)
 - CSV (Excel uyumlu, UTF-8 BOM, `;` ayraç) ve JSON indirme
 
-## Geliştirme (tarayıcı)
+## Geliştirme
+
+### Tarayıcı
 
 ```bash
 npm install
 npm run dev
 ```
 
-`http://localhost:5173` adresine git. Vite, `/detsis` istekleri için yetkiliapi.detsis.gov.tr'ye proxy yapar.
+`http://localhost:5173` adresine git. Vite, `/detsis` isteklerini yetkiliapi.detsis.gov.tr'ye proxy yapar (gov başlıkları enjekte edilir).
 
-## Geliştirme (Electron, masaüstü)
+### Electron (masaüstü)
 
 ```bash
 npm install
 npm run electron:dev
 ```
 
-Electron penceresi açılır, devtools detached. Vite hot reload ile React kodu değiştikçe yenilenir.
-
-## Production build (installer)
-
-Sadece kendi platformunuz için (önerilen):
+## Production build
 
 ```bash
-npm run electron:build
+npm run electron:build         # mevcut platform için installer
+npm run electron:build:mac     # macOS (.dmg + .zip)
+npm run electron:build:win     # Windows (NSIS .exe + portable + zip)
+npm run electron:build:linux   # Linux (.AppImage + .deb)
 ```
 
-Üretilen dosyalar `release/` altında. Platforma göre:
+Çıktılar `release/` altında.
 
-| Platform | Çıktı |
-| -------- | ----- |
-| macOS    | `.dmg`, `.zip` (arm64 + x64) |
-| Windows  | NSIS `.exe` installer + `portable.exe` |
-| Linux    | `.AppImage`, `.deb` |
-
-Spesifik platform için:
-
-```bash
-npm run electron:build:mac
-npm run electron:build:win
-npm run electron:build:linux
-```
-
-> Çapraz platform build (Mac'te Win exe vb.) için Wine / extra toolchain gerekebilir; en sağlamı her platformda kendi makinesinde build almak veya GitHub Actions kullanmak.
+> Çapraz platform build (Mac'ten Win exe vb.) electron-builder Wine'ı kendi indirir. Sağlam ürün için her platformda yerelde build veya GitHub Actions kullanmak önerilir.
 
 ## Mimari
 
-- **Renderer**: React 18 + Vite. `src/` altında.
-- **Main process**: `electron/main.cjs` — uygulama açılışında localhost'ta rastgele portta küçük bir HTTP proxy başlatır (`/detsis/...` → `https://yetkiliapi.detsis.gov.tr/...`). Detsis sunucusunun talep ettiği `Origin`, `Referer`, `User-Agent` başlıklarını enjekte eder; bu nedenle 403 Forbidden almazsınız.
-- **Preload**: `electron/preload.cjs` — port bilgisini renderer'a `window.DETSIS_PROXY_BASE` olarak verir. `src/api.js` bunu okur, dev'de düşerse `/detsis` (Vite proxy) kullanır.
+- **Renderer**: React 18 + Vite, `src/` altında.
+- **Main process**: `electron/main.cjs` — uygulama açılırken localhost'ta rastgele portta HTTP proxy başlatır: `/detsis/...` → `https://yetkiliapi.detsis.gov.tr/...`. Detsis'in talep ettiği `Origin`, `Referer`, `User-Agent` başlıklarını enjekte eder.
+- **Preload**: `electron/preload.cjs` — port bilgisini renderer'a `window.DETSIS_PROXY_BASE` olarak verir. `src/api.js` bunu okur; tarayıcı dev modunda fallback olarak `/detsis` (Vite proxy) kullanır.
 
 ## Lisans
 
-MIT (sadece UI; veri DETSİS'e aittir).
+MIT.

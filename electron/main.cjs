@@ -96,7 +96,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0f172a',
-    title: 'Detsis Explorer',
+    title: 'Deteasy',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
