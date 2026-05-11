@@ -1,7 +1,7 @@
 {
   "name": "detseasy",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Detseasy — DETSİS birim arama masaüstü uygulaması",
   "author": "Birkan Kader",
   "main": "electron/main.cjs",
@@ -33,7 +33,11 @@
     "appId": "com.birkankader.detseasy",
     "productName": "Detseasy",
     "publish": [
-      { "provider": "github", "owner": "Birkankader", "repo": "Detseasy" }
+      {
+        "provider": "github",
+        "owner": "Birkankader",
+        "repo": "Detseasy"
+      }
     ],
     "asar": true,
     "directories": {
@@ -51,20 +55,47 @@
     "mac": {
       "category": "public.app-category.utilities",
       "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] },
-        { "target": "zip", "arch": ["arm64", "x64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ]
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "linux": {
       "category": "Utility",
       "target": [
-        { "target": "AppImage", "arch": ["x64"] },
-        { "target": "deb", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
