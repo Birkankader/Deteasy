@@ -1,13 +1,16 @@
 // Electron main process. Boots a tiny HTTP proxy on a random localhost port
 // that mirrors the Vite dev proxy, then loads the built React app from disk.
 //
-// Also polls GitHub releases for app updates and notifies the renderer.
+// Uses electron-updater + GitHub Releases for automatic update download &
+// install on Windows NSIS builds. The renderer drives the install UX via
+// IPC messages.
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
 const path = require('node:path')
 const http = require('node:http')
 const https = require('node:https')
 const { URL } = require('node:url')
+const { autoUpdater } = require('electron-updater')
 
 const UPSTREAM = 'https://yetkiliapi.detsis.gov.tr'
 const ORIGIN = 'https://yetkili.detsis.gov.tr'
@@ -15,14 +18,15 @@ const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-const UPDATE_REPO = { owner: 'Birkankader', repo: 'Deteasy' }
 const UPDATE_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
 
 const isDev = process.env.ELECTRON_DEV === '1'
 
 let proxyPort = 0
 let mainWin = null
-let latestUpdateInfo = null
+let lastUpdateState = null // last payload pushed to renderer (for re-emits)
+
+// ---- HTTP proxy --------------------------------------------------------------
 
 function startProxy() {
   return new Promise((resolve, reject) => {
@@ -36,16 +40,13 @@ function startProxy() {
         res.end()
         return
       }
-
       if (!req.url.startsWith('/detsis/')) {
         res.writeHead(404)
         res.end('Not found')
         return
       }
-
       const upstreamPath = req.url.replace(/^\/detsis/, '')
       const target = new URL(upstreamPath, UPSTREAM)
-
       const upReq = https.request(
         {
           method: req.method,
@@ -66,9 +67,7 @@ function startProxy() {
           upRes.pipe(res)
         }
       )
-      upReq.on('timeout', () => {
-        upReq.destroy(new Error('upstream timeout'))
-      })
+      upReq.on('timeout', () => upReq.destroy(new Error('upstream timeout')))
       upReq.on('error', (err) => {
         if (!res.headersSent) {
           res.writeHead(502, { 'Content-Type': 'application/json' })
@@ -87,104 +86,95 @@ function startProxy() {
   })
 }
 
-// --- Update check (GitHub releases) -----------------------------------------
+// ---- Auto-updater ------------------------------------------------------------
 
-function compareVersions(a, b) {
-  const pa = String(a).split(/[.-]/).map((p) => parseInt(p, 10) || 0)
-  const pb = String(b).split(/[.-]/).map((p) => parseInt(p, 10) || 0)
-  const len = Math.max(pa.length, pb.length)
-  for (let i = 0; i < len; i++) {
-    const da = pa[i] || 0
-    const db = pb[i] || 0
-    if (da > db) return 1
-    if (da < db) return -1
+function sendUpdate(channel, payload) {
+  lastUpdateState = { channel, payload }
+  if (mainWin && !mainWin.isDestroyed()) {
+    mainWin.webContents.send(channel, payload || {})
   }
-  return 0
 }
 
-function pickWinAsset(assets) {
-  if (!Array.isArray(assets)) return null
-  // Prefer portable; fall back to installer.
-  const portable = assets.find(
-    (a) => /\.exe$/i.test(a.name) && !/setup/i.test(a.name) && !/blockmap/i.test(a.name)
+function configureUpdater() {
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.allowPrerelease = false
+  autoUpdater.allowDowngrade = false
+
+  autoUpdater.on('checking-for-update', () => sendUpdate('update:checking', {}))
+
+  autoUpdater.on('update-available', (info) =>
+    sendUpdate('update:available', {
+      version: info.version,
+      releaseDate: info.releaseDate,
+      releaseNotes:
+        typeof info.releaseNotes === 'string'
+          ? info.releaseNotes
+          : Array.isArray(info.releaseNotes)
+          ? info.releaseNotes.map((n) => n.note || '').join('\n\n')
+          : '',
+      currentVersion: app.getVersion(),
+    })
   )
-  if (portable) return portable
-  const installer = assets.find((a) => /Setup.*\.exe$/i.test(a.name))
-  if (installer) return installer
-  return assets.find((a) => /\.(exe|zip|dmg|AppImage|deb)$/i.test(a.name))
+
+  autoUpdater.on('update-not-available', (info) =>
+    sendUpdate('update:not-available', {
+      version: info?.version,
+      currentVersion: app.getVersion(),
+    })
+  )
+
+  autoUpdater.on('download-progress', (p) =>
+    sendUpdate('update:download-progress', {
+      percent: p.percent,
+      transferred: p.transferred,
+      total: p.total,
+      bytesPerSecond: p.bytesPerSecond,
+    })
+  )
+
+  autoUpdater.on('update-downloaded', (info) =>
+    sendUpdate('update:downloaded', {
+      version: info.version,
+      currentVersion: app.getVersion(),
+    })
+  )
+
+  autoUpdater.on('error', (err) =>
+    sendUpdate('update:error', { message: err?.message || String(err) })
+  )
 }
 
-function fetchLatestRelease() {
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        host: 'api.github.com',
-        path: `/repos/${UPDATE_REPO.owner}/${UPDATE_REPO.repo}/releases/latest`,
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Deteasy-Updater',
-          Accept: 'application/vnd.github+json',
-        },
-        timeout: 10_000,
-      },
-      (res) => {
-        let body = ''
-        res.on('data', (c) => (body += c))
-        res.on('end', () => {
-          if (res.statusCode !== 200) {
-            return reject(new Error(`GitHub HTTP ${res.statusCode}`))
-          }
-          try {
-            resolve(JSON.parse(body))
-          } catch (e) {
-            reject(e)
-          }
-        })
-      }
-    )
-    req.on('timeout', () => req.destroy(new Error('GitHub timeout')))
-    req.on('error', reject)
-    req.end()
-  })
+function isPortable() {
+  return Boolean(process.env.PORTABLE_EXECUTABLE_DIR || process.env.PORTABLE_EXECUTABLE_FILE)
 }
 
-async function checkForUpdates(triggeredByUser = false) {
+function canAutoUpdate() {
+  if (isDev) return false
+  if (!app.isPackaged) return false
+  if (isPortable()) return false
+  return true
+}
+
+async function checkForUpdates(userTriggered = false) {
+  if (!canAutoUpdate()) {
+    if (userTriggered) {
+      sendUpdate('update:unsupported', {
+        reason: isPortable()
+          ? 'Portable çalışıyor — auto-update için NSIS kurulum sürümü gerekli.'
+          : 'Dev ortamı, güncelleme devre dışı.',
+      })
+    }
+    return
+  }
   try {
-    const release = await fetchLatestRelease()
-    const latest = (release.tag_name || '').replace(/^v/, '').trim()
-    const current = app.getVersion()
-    if (!latest) return null
-
-    const newer = compareVersions(latest, current) > 0
-    if (!newer) {
-      if (triggeredByUser && mainWin) {
-        mainWin.webContents.send('update:none', { currentVersion: current })
-      }
-      return null
-    }
-
-    const asset = pickWinAsset(release.assets)
-    latestUpdateInfo = {
-      currentVersion: current,
-      latestVersion: latest,
-      releaseUrl: release.html_url,
-      assetUrl: asset?.browser_download_url || release.html_url,
-      assetName: asset?.name || null,
-      releaseNotes: release.body || '',
-      publishedAt: release.published_at,
-    }
-    if (mainWin) mainWin.webContents.send('update:available', latestUpdateInfo)
-    return latestUpdateInfo
-  } catch (e) {
-    console.error('[update] check failed:', e.message)
-    if (triggeredByUser && mainWin) {
-      mainWin.webContents.send('update:error', { message: e.message })
-    }
-    return null
+    await autoUpdater.checkForUpdates()
+  } catch (err) {
+    sendUpdate('update:error', { message: err?.message || String(err) })
   }
 }
 
-// --- App lifecycle ----------------------------------------------------------
+// ---- App lifecycle -----------------------------------------------------------
 
 async function createWindow() {
   await startProxy()
@@ -203,6 +193,7 @@ async function createWindow() {
       additionalArguments: [
         `--detsis-proxy-port=${proxyPort}`,
         `--deteasy-version=${app.getVersion()}`,
+        `--deteasy-can-auto-update=${canAutoUpdate() ? '1' : '0'}`,
       ],
     },
   })
@@ -219,25 +210,36 @@ async function createWindow() {
     await mainWin.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   }
 
-  // Re-send the cached update info to the renderer once it's ready (e.g. after
-  // a reload), then run a fresh check.
+  // Re-emit cached state on reload so the banner survives renderer reloads.
   mainWin.webContents.on('did-finish-load', () => {
-    if (latestUpdateInfo) {
-      mainWin.webContents.send('update:available', latestUpdateInfo)
+    if (lastUpdateState) {
+      mainWin.webContents.send(lastUpdateState.channel, lastUpdateState.payload)
     }
   })
 
-  // Initial check + periodic polling.
-  setTimeout(() => checkForUpdates(false), 4_000)
-  setInterval(() => checkForUpdates(false), UPDATE_INTERVAL_MS)
+  // Initial + periodic checks (only when auto-update is supported).
+  if (canAutoUpdate()) {
+    setTimeout(() => checkForUpdates(false), 4_000)
+    setInterval(() => checkForUpdates(false), UPDATE_INTERVAL_MS)
+  }
 }
 
+// IPC: manual check, quit-and-install, open external (release page).
 ipcMain.handle('update:check', () => checkForUpdates(true))
+ipcMain.handle('update:install', () => {
+  if (!canAutoUpdate()) return false
+  // isSilent=false shows installer UI; isForceRunAfter=true relaunches app.
+  setImmediate(() => autoUpdater.quitAndInstall(false, true))
+  return true
+})
 ipcMain.handle('update:open', (_evt, url) => {
   if (typeof url === 'string') shell.openExternal(url)
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  configureUpdater()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

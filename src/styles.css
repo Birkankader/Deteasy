@@ -756,6 +756,57 @@ tbody tr:hover { background: rgba(56, 189, 248, 0.04); }
   border-color: var(--accent);
 }
 .update-fab:disabled { opacity: 0.5; cursor: wait; }
+.update-fab .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.update-fab .dot.warn { background: #facc15; }
+.update-fab .dot.pulse {
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.update-banner.state-downloading,
+.update-banner.state-downloaded {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.14), rgba(56, 189, 248, 0.08));
+  border-color: #22c55e;
+}
+
+.ub-progress {
+  position: relative;
+  margin-top: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  height: 18px;
+  overflow: hidden;
+  min-width: 260px;
+  max-width: 420px;
+}
+.ub-progress .ub-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #22c55e, #38bdf8);
+  transition: width 0.2s ease;
+}
+.ub-progress span {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 18px;
+  font-size: 11px;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
 
 @media (max-width: 900px) {
   .row { grid-template-columns: 1fr 1fr; }

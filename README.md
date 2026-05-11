@@ -52,37 +52,40 @@ npm run electron:build:linux   # Linux (.AppImage + .deb)
 - **Main process**: `electron/main.cjs` — uygulama açılırken localhost'ta rastgele portta HTTP proxy başlatır: `/detsis/...` → `https://yetkiliapi.detsis.gov.tr/...`. Detsis'in talep ettiği `Origin`, `Referer`, `User-Agent` başlıklarını enjekte eder.
 - **Preload**: `electron/preload.cjs` — port bilgisini renderer'a `window.DETSIS_PROXY_BASE` olarak verir. `src/api.js` bunu okur; tarayıcı dev modunda fallback olarak `/detsis` (Vite proxy) kullanır.
 
-## Güncelleme Bildirimi
+## Otomatik Güncelleme
 
-Uygulama her açılışta ve sonraki her 30 dakikada bir GitHub Releases'ı kontrol eder:
-`https://api.github.com/repos/Birkankader/Deteasy/releases/latest`. Mevcut sürüm
-(`package.json#version`) ile karşılaştırıp yenisi varsa üstte mavi banner çıkar.
-"İndir / Güncelle" tuşu varsayılan tarayıcıda release sayfasını / portable .exe
-download linkini açar. Kullanıcı yeni `.exe`'yi eski portable'ın yerine koyar.
+NSIS Setup ile kurulu sürümlerde tam **auto-update**:
 
-Sağ alt köşede her zaman bir mini sürüm rozeti vardır; tıklayınca anlık kontrol
-yapar (güncel ise yeşil toast, hata varsa kırmızı toast).
+1. App açılışta + her 30 dk'da GitHub Releases'ı kontrol eder (`electron-updater`)
+2. Yeni sürüm varsa **arka planda otomatik indirir** (progress banner üstte)
+3. İndirme bitince banner **"Yükle ve yeniden başlat"** butonuna döner
+4. Tıkla → installer çalışır, app yeniden başlar (kullanıcı dosya kopyalamaz)
+
+Sağ alt köşede her zaman sürüm rozeti vardır; tıklayınca anlık kontrol tetikler.
+Portable veya dev modunda rozet sarı nokta ile işaretlenir (auto-update yok).
 
 ### Yeni sürüm yayınlama (geliştirici tarafı)
 
+`electron-builder` GH_TOKEN ile GitHub release'i kendi oluşturur, `latest.yml`
+metadata dosyası dahil tüm artefaktları yükler. `latest.yml` olmadan istemci
+auto-update tetiklenmez — bu yüzden manuel `gh release create` YERİNE
+electron-builder'ı kullanın:
+
 ```bash
-# 1. package.json#version'u artır (örn 0.1.0 -> 0.2.0)
-npm version patch    # veya minor / major
+# 1. Versiyonu artır
+npm version patch       # 0.1.0 -> 0.1.1, otomatik commit + tag
 git push --follow-tags
 
-# 2. Win build
-npm run electron:build:win
+# 2. GitHub Personal Access Token (repo scope) export et
+export GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 
-# 3. GitHub release oluştur, release/ altındaki dosyaları yükle
-gh release create v0.2.0 \
-  "release/Deteasy 0.2.0.exe" \
-  "release/Deteasy Setup 0.2.0.exe" \
-  --title "Deteasy v0.2.0" \
-  --notes "Sürüm notları…"
+# 3. Build + publish (release otomatik, taslak olarak oluşur)
+npm run electron:build:win -- --publish always
 ```
 
-Açık olan uygulamalar 30 dk içinde update'i otomatik görür; kullanıcı pencereyi
-kapatmadan banner ile haberdar olur.
+Sonra GitHub'da release'i "Draft" → "Published" yapın. Açık olan tüm Deteasy
+örnekleri 30 dk içinde otomatik tetiklenir; banner indirme progress'i gösterir,
+kullanıcı tek tıkla yükler.
 
 ## Lisans
 
