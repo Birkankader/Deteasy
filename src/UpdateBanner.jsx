@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const DISMISS_KEY = 'deteasy:dismissedVersion'
+const DISMISS_KEY = 'detseasy:dismissedVersion'
 
 // Banner state machine:
 //   idle        -> initial / current
@@ -18,10 +18,10 @@ export default function UpdateBanner() {
   const [toast, setToast] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  const u = typeof window !== 'undefined' ? window.DETEASY?.updater : null
-  const version = typeof window !== 'undefined' ? window.DETEASY?.version : ''
+  const u = typeof window !== 'undefined' ? window.DETSEASY?.updater : null
+  const version = typeof window !== 'undefined' ? window.DETSEASY?.version : ''
   const canAutoUpdate =
-    typeof window !== 'undefined' ? !!window.DETEASY?.canAutoUpdate : false
+    typeof window !== 'undefined' ? !!window.DETSEASY?.canAutoUpdate : false
 
   useEffect(() => {
     if (!u) return

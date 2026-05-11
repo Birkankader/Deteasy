@@ -185,15 +185,15 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0f172a',
-    title: 'Deteasy',
+    title: 'Detseasy',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.cjs'),
       additionalArguments: [
         `--detsis-proxy-port=${proxyPort}`,
-        `--deteasy-version=${app.getVersion()}`,
-        `--deteasy-can-auto-update=${canAutoUpdate() ? '1' : '0'}`,
+        `--detseasy-version=${app.getVersion()}`,
+        `--detseasy-can-auto-update=${canAutoUpdate() ? '1' : '0'}`,
       ],
     },
   })

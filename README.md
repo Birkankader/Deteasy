@@ -1,4 +1,4 @@
-# Deteasy
+# Detseasy
 
 DETSİS (Devlet Teşkilatı Merkezi Kayıt Sistemi) birimlerini filtreleyip incelemek için React + Electron tabanlı masaüstü uygulaması.
 
@@ -83,7 +83,7 @@ export GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 npm run electron:build:win -- --publish always
 ```
 
-Sonra GitHub'da release'i "Draft" → "Published" yapın. Açık olan tüm Deteasy
+Sonra GitHub'da release'i "Draft" → "Published" yapın. Açık olan tüm Detseasy
 örnekleri 30 dk içinde otomatik tetiklenir; banner indirme progress'i gösterir,
 kullanıcı tek tıkla yükler.
 

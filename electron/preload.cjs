@@ -8,8 +8,8 @@ function readArg(flag) {
 }
 
 const port = readArg('--detsis-proxy-port')
-const version = readArg('--deteasy-version')
-const canAutoUpdate = readArg('--deteasy-can-auto-update') === '1'
+const version = readArg('--detseasy-version')
+const canAutoUpdate = readArg('--detseasy-can-auto-update') === '1'
 
 const base = port ? `http://127.0.0.1:${port}/detsis` : ''
 
@@ -20,7 +20,7 @@ function listen(channel, cb) {
 }
 
 contextBridge.exposeInMainWorld('DETSIS_PROXY_BASE', base)
-contextBridge.exposeInMainWorld('DETEASY', {
+contextBridge.exposeInMainWorld('DETSEASY', {
   version,
   canAutoUpdate,
   updater: {

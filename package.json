@@ -1,8 +1,8 @@
 {
-  "name": "deteasy",
+  "name": "detseasy",
   "private": true,
   "version": "0.1.0",
-  "description": "Deteasy — DETSİS birim arama masaüstü uygulaması",
+  "description": "Detseasy — DETSİS birim arama masaüstü uygulaması",
   "author": "Birkan Kader",
   "main": "electron/main.cjs",
   "scripts": {
@@ -30,10 +30,10 @@
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "com.birkankader.deteasy",
-    "productName": "Deteasy",
+    "appId": "com.birkankader.detseasy",
+    "productName": "Detseasy",
     "publish": [
-      { "provider": "github", "owner": "Birkankader", "repo": "Deteasy" }
+      { "provider": "github", "owner": "Birkankader", "repo": "Detseasy" }
     ],
     "asar": true,
     "directories": {
