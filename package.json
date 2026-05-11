@@ -1,7 +1,7 @@
 {
   "name": "detseasy",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Detseasy — DETSİS birim arama masaüstü uygulaması",
   "author": "Birkan Kader",
   "main": "electron/main.cjs",
@@ -99,11 +99,11 @@
       ]
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
       "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
       "differentialPackage": true
     }
   }
