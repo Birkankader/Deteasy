@@ -779,6 +779,25 @@ tbody tr:hover { background: rgba(56, 189, 248, 0.04); }
   background: linear-gradient(90deg, rgba(34, 197, 94, 0.14), rgba(56, 189, 248, 0.08));
   border-color: #22c55e;
 }
+.update-banner.state-installing {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.16), rgba(168, 85, 247, 0.1));
+  border-color: var(--accent);
+}
+
+.ub-progress.indeterminate {
+  background: var(--panel-2);
+}
+.ub-progress.indeterminate .ub-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35% !important;
+  background: linear-gradient(90deg, transparent, #38bdf8 50%, transparent);
+  animation: indeterminate 1.6s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  0%   { left: -35%; }
+  100% { left: 100%; }
+}
 
 .ub-progress {
   position: relative;

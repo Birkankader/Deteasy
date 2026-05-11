@@ -94,12 +94,16 @@ export default function UpdateBanner() {
   async function installNow() {
     if (!u) return
     setBusy(true)
+    setState('installing')
     await u.install()
     // App will quit & restart; no further state to handle.
   }
 
   const visible =
-    (state === 'available' || state === 'downloading' || state === 'downloaded') && info
+    (state === 'available' ||
+      state === 'downloading' ||
+      state === 'downloaded' ||
+      state === 'installing') && info
 
   return (
     <>
@@ -107,11 +111,22 @@ export default function UpdateBanner() {
         <div className={'update-banner state-' + state} role="status">
           <div className="ub-left">
             <span className="ub-emoji">
-              {state === 'downloaded' ? '✅' : state === 'downloading' ? '⬇️' : '⬆️'}
+              {state === 'installing'
+                ? '⚙️'
+                : state === 'downloaded'
+                ? '✅'
+                : state === 'downloading'
+                ? '⬇️'
+                : '⬆️'}
             </span>
             <div>
               <div className="ub-title">
-                {state === 'downloaded' ? (
+                {state === 'installing' ? (
+                  <>
+                    <strong>v{info.version}</strong> yükleniyor · uygulama otomatik yeniden
+                    başlayacak
+                  </>
+                ) : state === 'downloaded' ? (
                   <>
                     Yeni sürüm <strong>v{info.version}</strong> indirildi · yüklemek için
                     yeniden başlat
@@ -138,6 +153,13 @@ export default function UpdateBanner() {
                   </span>
                 </div>
               )}
+
+              {state === 'installing' && (
+                <div className="ub-progress indeterminate">
+                  <div className="ub-bar" />
+                  <span>Lütfen bekleyin…</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="ub-right">
@@ -156,9 +178,16 @@ export default function UpdateBanner() {
                 {state === 'available' ? 'İndirme hazırlanıyor…' : 'İndiriliyor'}
               </button>
             )}
-            <button type="button" className="ub-ghost" onClick={dismiss}>
-              Sonra
-            </button>
+            {state === 'installing' && (
+              <button type="button" className="ub-ghost" disabled>
+                Yükleniyor…
+              </button>
+            )}
+            {state !== 'installing' && (
+              <button type="button" className="ub-ghost" onClick={dismiss}>
+                Sonra
+              </button>
+            )}
           </div>
         </div>
       )}

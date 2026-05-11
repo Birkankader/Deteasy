@@ -228,8 +228,9 @@ async function createWindow() {
 ipcMain.handle('update:check', () => checkForUpdates(true))
 ipcMain.handle('update:install', () => {
   if (!canAutoUpdate()) return false
-  // isSilent=false shows installer UI; isForceRunAfter=true relaunches app.
-  setImmediate(() => autoUpdater.quitAndInstall(false, true))
+  // Silent install: NSIS runs with /S, no wizard window. App quits then
+  // installer restarts the new binary. isForceRunAfter=true ensures relaunch.
+  setImmediate(() => autoUpdater.quitAndInstall(true, true))
   return true
 })
 ipcMain.handle('update:open', (_evt, url) => {
